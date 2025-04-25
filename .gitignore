@@ -1,0 +1,61 @@
+# build directories
+build 
+install
+# Logs and temporary files
+/log/
+/logs/
+/*.log
+*.log.*
+
+# CMake specific files
+/CMakeLists.txt.user
+/cmake-build-debug/
+/CMakeCache.txt
+/CMakeFiles/
+/cmake_install.cmake
+/Makefile
+/compile_commands.json
+
+# Python cache files
+__pycache__/
+/*.py[cod]
+*.so
+
+# IDE specific files
+/.idea/
+/.vscode/
+/*.swp
+/.DS_Store
+
+# Other development files
+*.bak
+*.tmp
+*.temp
+*~
+
+# Ignore tests build files
+/test_results/
+
+
+# Miscellaneous binary files
+*.out
+*.o
+*.a
+*.so
+
+
+# CLion, JetBrains IDE files
+/.idea/
+*.iml
+
+# ROS workspace environment
+/setup.sh
+/setup.bash
+/setup.zsh
+/setup.*.bash
+/setup.*.sh
+/setup.*.zsh
+
+# Custom executables
+/bin/
+/lib/
