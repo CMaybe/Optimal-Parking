@@ -1,0 +1,3 @@
+function(install_optimal_parking)
+
+endfunction(install_optimal_parking)

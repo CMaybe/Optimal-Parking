@@ -1,0 +1,15 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_package(Eigen3 3.4 CONFIG REQUIRED QUIET)
+if(NOT TARGET Eigen3::Eigen)
+  message(FATAL_ERROR "Eigen3 not found. Ensure it is installed and accessible.")
+endif()
+
+find_package(PkgConfig REQUIRED)
+
+set_and_check(optimal_parking_INCLUDE_DIRS "@CMAKE_INSTALL_PREFIX@/@CMAKE_INSTALL_INCLUDEDIR@")
+set_and_check(optimal_parking_LIB_DIRS "@CMAKE_INSTALL_PREFIX@/@CMAKE_INSTALL_LIBDIR@")
+
+set(optimal_parking_FOUND TRUE) 
+include("${optimal_parking_LIB_DIRS}/cmake/optimal_parking/optimal_parking-targets.cmake")
