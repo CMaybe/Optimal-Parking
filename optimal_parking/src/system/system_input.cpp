@@ -2,6 +2,8 @@
 
 namespace optimal_parking {
 
+SystemInput::SystemInput() : acceleration_(0), steering_rate_(0) { system_input_.setZero(); }
+
 SystemInput::SystemInput(const double& acceleration, const double& steering_rate)
     : acceleration_(acceleration), steering_rate_(steering_rate) {
     system_input_ << acceleration, steering_rate;

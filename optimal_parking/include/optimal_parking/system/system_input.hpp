@@ -6,7 +6,7 @@
 namespace optimal_parking {
 class SystemInput {
 public:
-    SystemInput() = default;
+    SystemInput();
     SystemInput(const double& acceleration, const double& steering_rate);
     SystemInput(const SystemInput& other);
     SystemInput(const Eigen::Ref<const Eigen::Vector2d>& system_input);

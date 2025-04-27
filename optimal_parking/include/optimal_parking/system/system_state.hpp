@@ -6,11 +6,12 @@
 namespace optimal_parking {
 class SystemState {
 public:
-    SystemState() = default;
+    SystemState();
     SystemState(const double& x, const double& y, const double& yaw, const double& velocity, const double& delta);
     SystemState(const SystemState& other);
     SystemState(const Eigen::Ref<const Eigen::Vector<double, 5>>& system_state);
     SystemState& operator=(const SystemState& other);
+    SystemState& operator=(const Eigen::Vector<double, 5>& system_state);
 
     void updateState(const double& x, const double& y, const double& yaw, const double& velocity, const double& delta);
     void updateState(const Eigen::Ref<const Eigen::Vector<double, 5>>& system_state);

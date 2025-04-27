@@ -33,7 +33,7 @@ void SystemModel::initialize(const double& dt, const double& wheel_radius, const
     car_width_ = car_width;
 }
 
-Eigen::Ref<Eigen::Vector<double, 5>> SystemModel::f(const SystemState& state, const SystemInput& input) {
+Eigen::Vector<double, 5> SystemModel::f(const SystemState& state, const SystemInput& input) const {
     Eigen::Vector<double, 5> state_dot;
     // clang-format off
     state_dot <<   state.velocity() * std::cos(state.yaw()), 
@@ -45,7 +45,7 @@ Eigen::Ref<Eigen::Vector<double, 5>> SystemModel::f(const SystemState& state, co
     return state_dot;
 }
 
-ModelMatrices SystemModel::getLinearizedMatrices(const SystemState& state, const SystemInput& input) {
+ModelMatrices SystemModel::getSystemJacobian(const SystemState& state, const SystemInput& input) {
     Eigen::Vector<double, 5> state_dot = f(state, input);
     // clang-format off
     Ac_ <<  0, 0, -state.velocity() * std::sin(state.yaw()),                  std::cos(state.yaw()),                                                                                     0,

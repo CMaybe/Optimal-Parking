@@ -24,8 +24,8 @@ public:
     void initialize(const std::string& path);
     void initialize(const double& dt, const double& wheel_radius, const double& car_length, const double& car_width);
 
-    Eigen::Ref<Eigen::Vector<double, 5>> f(const SystemState& state, const SystemInput& input);
-    ModelMatrices getLinearizedMatrices(const SystemState& state, const SystemInput& input);
+    Eigen::Vector<double, 5> f(const SystemState& state, const SystemInput& input) const;
+    ModelMatrices getSystemJacobian(const SystemState& state, const SystemInput& input);
     inline Eigen::Matrix<double, 5, 5> Ac() const { return Ac_; };
     inline Eigen::Matrix<double, 5, 5> Ad() const { return Ad_; };
     inline Eigen::Matrix<double, 5, 2> Bc() const { return Bc_; };
