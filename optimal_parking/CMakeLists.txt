@@ -6,7 +6,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic")
 set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
@@ -14,7 +14,7 @@ set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
 find_package(Eigen3 3.4 CONFIG REQUIRED QUIET)
 find_package(PkgConfig REQUIRED QUIET)
 find_package(yaml-cpp REQUIRED)
-find_package(proxsuite REQUIRED)
+find_package(OsqpEigen)
 
 
 add_library(${PROJECT_NAME} SHARED)
@@ -28,13 +28,14 @@ target_sources(
 		src/system/system_state.cpp
 		src/system/system_model.cpp
 		src/system/system_input.cpp
+		src/trajectory_optimizer.cpp
 )
 
 target_link_libraries(
 	${PROJECT_NAME} PUBLIC
 	Eigen3::Eigen
 	${YAML_CPP_LIBRARIES}
-	proxsuite::proxsuite
+	OsqpEigen::OsqpEigen
 )
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
