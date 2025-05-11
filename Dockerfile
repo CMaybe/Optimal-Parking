@@ -39,6 +39,7 @@ RUN apt-get update && apt-get install -y \
     cmake \
     git \
     gnupg2 \
+    pkg-config \
     python3-numpy \
     python3-matplotlib \
     python3 \
@@ -85,16 +86,6 @@ RUN git clone --branch v1.16.0 https://github.com/google/googletest.git /opt/goo
     && make install \
     && cd /opt && rm -r /opt/googletest
 
-# Install Abseil 2.20250127.1
-RUN git clone --branch 20250127.1 https://github.com/abseil/abseil-cpp.git /opt/abseil-cpp \
-    && mkdir -p /opt/abseil-cpp/build && cd /opt/abseil-cpp/build \
-    && cmake \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-    .. \
-    && make install \
-    && cd /opt && rm -r /opt/abseil-cpp
-
 
 # Install OSQP v1.0.0
 RUN git clone --branch v1.0.0 --recursive https://github.com/osqp/osqp.git /opt/osqp \
@@ -104,13 +95,14 @@ RUN git clone --branch v1.0.0 --recursive https://github.com/osqp/osqp.git /opt/
     && cd /opt && rm -r /opt/osqp
 
 # osqp-cpp
-RUN git clone https://github.com/google/osqp-cpp.git  /opt/osqp-cpp \
-    && mkdir -p /opt/osqp-cpp/build && cd /opt/osqp-cpp/build \
+# Install osqp-eigen v0.10.0
+RUN git clone --branch v0.10.0 https://github.com/robotology/osqp-eigen.git /opt/osqp-eigen \
+    && mkdir -p /opt/osqp-eigen/build && cd /opt/osqp-eigen/build \
     && cmake \
     -DCMAKE_BUILD_TYPE=Release \
     .. \
     && make install \
-    && cd /opt && rm -r /opt/osqp-cpp
+    && cd /opt && rm -r /opt/osqp-eigen
 
 # Install matplotlib-cpp
 RUN git clone https://github.com/lava/matplotlib-cpp.git  --recursive /opt/matplotlib-cpp \
@@ -142,7 +134,9 @@ ENV HOME=/home/${USER_NAME}
 ENV LD_LIBRARY_PATH=/opt/blasfeo/lib:/opt/hpipm/lib
 
 RUN echo "export USER=${USER_NAME}" >> ${HOME}/.bashrc \
-    && echo "export GROUP=${GROUP_NAME}" >> ${HOME}/.bashrc 
+    && echo "export GROUP=${GROUP_NAME}" >> ${HOME}/.bashrc \
+    && echo "export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH" >> ${HOME}/.bashrc 
+
 # Shell
 USER ${USER_NAME}
 WORKDIR /home/${USER_NAME}/${PROJECT_NAME}
