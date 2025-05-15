@@ -54,9 +54,9 @@ ModelMatrices SystemModel::getSystemJacobian(const SystemState& state, const Sys
     // clang-format off
     Bc <<  0, 0,
            0, 0,
-           0, 1,
            0, 0,
-           1, 0;
+           1, 0,
+           0, 1;
     // clang-format on
     gc = state_dot - Ac * state - Bc * input;
 
