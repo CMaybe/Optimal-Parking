@@ -1,0 +1,59 @@
+name: build-test
+
+on:
+  push:
+    branches: ["develop/**", "feature/ci"]
+    paths: 
+      - "optimal_parking/**"
+      - ".github/workflows/optimal-parking.yaml"
+  pull_request:
+    branches: ["main"]
+
+env:
+  BUILD_TYPE: Debug
+
+jobs:
+  optimal-parking:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-22.04]
+    container:
+      image: ghcr.io/cmaybe/dev-optimal-parking:latest
+      options: --user root
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.github_token }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: |
+          cmake \
+            -S ./optimal_parking \
+            -B ./optimal_parking/build \
+            -G "Unix Makefiles" \
+            -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+
+      - name: Build
+        run: |
+          cmake \
+            --build ./optimal_parking/build \
+            --config ${{env.BUILD_TYPE}} \
+            --target install
+
+      - name: Configure example
+        run: |
+          cmake \
+            -S ./example \
+            -B ./example/build \
+            -G "Unix Makefiles" \
+            -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+
+      - name: Build
+        run: |
+          cmake \
+            --build ./example/build \
+            --config ${{env.BUILD_TYPE}}
+
