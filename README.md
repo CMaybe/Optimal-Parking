@@ -1,4 +1,5 @@
 # Optimal Parking
+[![build-test](https://github.com/CMaybe/Optimal-Parking/actions/workflows/optimal-parking.yaml/badge.svg)](https://github.com/CMaybe/Optimal-Parking/actions/workflows/optimal-parking.yaml)
 Optimal Parking is a project designed to optimize vehicle trajectories for parking scenarios using advanced mathematical models and optimization techniques. Visualization is handled via **matplotlibcpp**
 
 ## Dependencies

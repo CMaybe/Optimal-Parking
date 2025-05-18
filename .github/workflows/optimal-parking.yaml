@@ -2,7 +2,7 @@ name: build-test
 
 on:
   push:
-    branches: ["develop/**", "feature/**"]
+    branches: ["develop/**", "feature/ci"]
     paths: 
       - "optimal_parking/**"
       - ".github/workflows/optimal-parking.yaml"
