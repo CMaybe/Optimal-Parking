@@ -6,32 +6,27 @@
 
 #include "optimal_parking/system/system_input.hpp"
 #include "optimal_parking/system/system_state.hpp"
+#include "optimal_parking/types.hpp"
 
 namespace optimal_parking {
-
-struct ModelMatrices {
-    Eigen::Matrix<double, 5, 5> Ad;
-    Eigen::Matrix<double, 5, 2> Bd;
-    Eigen::Matrix<double, 5, 1> gd;
-};
 
 class SystemModel {
 public:
     SystemModel() = default;
-    SystemModel(const double& car_length, const double& car_width);
+    SystemModel(const double& vehicle_length, const double& vehicle_width);
     SystemModel(const std::string& path);
     SystemModel(const SystemModel& other);
     void initialize(const std::string& path);
-    void initialize(const double& car_length, const double& car_width);
+    void initialize(const double& vehicle_length, const double& vehicle_width);
 
     Eigen::Vector<double, 5> f(const SystemState& state, const SystemInput& input) const;
     ModelMatrices getSystemJacobian(const SystemState& state, const SystemInput& input, const double& dt) const;
-    inline double car_length() const { return car_length_; };
-    inline double car_width() const { return car_width_; };
+    inline double vehicle_length() const { return vehicle_length_; };
+    inline double vehicle_width() const { return vehicle_width_; };
 
 private:
-    double car_length_;
-    double car_width_;
+    double vehicle_length_;
+    double vehicle_width_;
 };
 
 }  // namespace optimal_parking

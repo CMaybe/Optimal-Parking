@@ -29,6 +29,7 @@ target_sources(
 		src/system/system_model.cpp
 		src/system/system_input.cpp
 		src/trajectory_optimizer.cpp
+		src/rrt_star.cpp	
 )
 
 target_link_libraries(

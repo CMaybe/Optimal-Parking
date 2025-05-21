@@ -3,6 +3,16 @@
 
 Optimal Parking is a project designed to optimize vehicle trajectories for parking scenarios using advanced mathematical models and optimization techniques. Visualization is handled via **matplotlibcpp**
 
+## Features
+- **Trajectory Optimization**: Implements Sequential Quadratic Programming (SQP) for trajectory planning.
+- **System Modeling**: Models vehicle dynamics using state-space representations.
+- **Obstacle Avoidance**: Incorporates static obstacle avoidance using geometric constraints.
+- **Path Planning with RRT***: Uses the RRT* algorithm to generate an initial feasible trajectory.
+- **Visualization**: Real-time visualization of vehicle trajectories and obstacles using `matplotlibcpp`.
+- **Configurable Parameters**: Easily modify parameters such as vehicle dimensions, trajectory time, and optimization weights via a `config.yaml` file.
+- **Devcontainer Support**: Quickly set up a development environment using Docker and Visual Studio Code.
+---
+
 ## Dependencies
 To build and run this project, the following dependencies are required:
 
@@ -66,26 +76,60 @@ sudo make install # default prefix is /usr/local
 The project uses a `config.yaml` file for parameter configuration. Below is an example configuration
 
 ```yaml
-car_length: 2.8
-car_width: 1.85
+vehicle_length: 2.8
+vehicle_width: 1.6
 
-initial_pose: [1.0, 5.0, -1.57, 0, 0]
-goal_pose: [5.0, 10.0, 1.57, 0, 0]
+initial_pose: [-6, 4, 0, 0, 0]
+goal_pose: [0, 0., 0, 0, 0]
 
-trajectory_time: 20
+trajectory_time: 70
 Ts: 0.1
 
-state_lowerbound: [-100.0, -100.0, -100, -1.0, -1.0]
-state_upperbound: [100.0, 100.0, 100, 1.0, 1.0]
+state_lowerbound: [-100.0, -100.0, -100, -0.63792, -0.63792]
+state_upperbound: [100.0, 100.0, 100, 0.63792, 0.63792]
 input_lowerbound: [-1.0, -1.0]
-input_upperbound: [1.0, 1.0]
+input_upperbound: [2.0, 2.0]
+
 
 state_weight: [0.0, 0.0, 0.0, 0.0, 0.0]
-input_weight: [4.0, 4.0]
+input_weight: [1.0, 10.0]
 
-n_sqp: 50
-max_iteration: 100
-rho_slack: 1000000.0
+n_sqp: 100
+max_iteration: 1000
+rho_goal: 10000.0
+rho_obs: 10.0
+
+
+obstacles:
+  - center: [-6.0 ,0.0]
+    length: 4.0
+    width: 2.0
+    yaw: 0.0
+  - center: [6.0, 0.0]
+    length: 4.0
+    width: 2.0
+    yaw: 0.0
+  - center: [0.0, -4.0]
+    length: 4.0
+    width: 3.0
+    yaw: 0.0
+  - center: [0.0, 8.0]
+    length: 10.0
+    width: 3.0
+    yaw: 0.0
+safety_margin: 0.0
+
+
+# RRT* parameters
+max_iterations: 10000
+goal_bias: 0.1
+map_x_min: -30.0
+map_x_max: 30.0
+map_y_min: -30.0
+map_y_max: 30.0
+goal_radius : 0.1
+step_dist : 0.9
+rewire_radius : 1.5
 ```
 
 
@@ -102,12 +146,11 @@ make -j
 #### Result
 ![demo1](docs/assets/demo/demo1.gif)
 ![demo2](docs/assets/demo/demo2.gif)
-
+![demo3](docs/assets/demo/demo3.gif)
 
 ## WIP ...
 
 ## TODO
--  Add obstacle avoidance in the TO formulation.
 -  Enhance technical documentation:
   - Add detailed explanations for the mathematical models used.
   - Include diagrams for system architecture and control flow.
