@@ -66,8 +66,8 @@ sudo make install # default prefix is /usr/local
 The project uses a `config.yaml` file for parameter configuration. Below is an example configuration
 
 ```yaml
-car_length: 2.8
-car_width: 1.85
+vehicle_length: 2.8
+vehicle_width: 1.85
 
 initial_pose: [1.0, 5.0, -1.57, 0, 0]
 goal_pose: [5.0, 10.0, 1.57, 0, 0]

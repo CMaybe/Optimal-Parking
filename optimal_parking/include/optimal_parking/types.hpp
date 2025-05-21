@@ -1,7 +1,5 @@
 #pragma once
 
-#include <optimal_parking/system/system_model.hpp>
-
 #include <Eigen/Dense>
 #include <memory>
 #include <random>

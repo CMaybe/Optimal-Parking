@@ -7,21 +7,23 @@ namespace optimal_parking {
 SystemModel::SystemModel(const std::string& path) {
     YAML::Node config = YAML::LoadFile(path);
 
-    car_length_ = config["car_length"].as<double>();
-    car_width_ = config["car_width"].as<double>();
+    vehicle_length_ = config["vehicle_length"].as<double>();
+    vehicle_width_ = config["vehicle_width"].as<double>();
 }
-SystemModel::SystemModel(const double& car_length, const double& car_width) : car_length_(car_length), car_width_(car_width) {}
-SystemModel::SystemModel(const SystemModel& other) : car_length_(other.car_length_), car_width_(other.car_width_) {}
+SystemModel::SystemModel(const double& vehicle_length, const double& vehicle_width)
+    : vehicle_length_(vehicle_length), vehicle_width_(vehicle_width) {}
+SystemModel::SystemModel(const SystemModel& other)
+    : vehicle_length_(other.vehicle_length_), vehicle_width_(other.vehicle_width_) {}
 
 void SystemModel::initialize(const std::string& path) {
     YAML::Node config = YAML::LoadFile(path);
 
-    car_length_ = config["car_length"].as<double>();
-    car_width_ = config["car_width"].as<double>();
+    vehicle_length_ = config["vehicle_length"].as<double>();
+    vehicle_width_ = config["vehicle_width"].as<double>();
 }
-void SystemModel::initialize(const double& car_length, const double& car_width) {
-    car_length_ = car_length;
-    car_width_ = car_width;
+void SystemModel::initialize(const double& vehicle_length, const double& vehicle_width) {
+    vehicle_length_ = vehicle_length;
+    vehicle_width_ = vehicle_width;
 }
 
 Eigen::Vector<double, 5> SystemModel::f(const SystemState& state, const SystemInput& input) const {
@@ -29,7 +31,7 @@ Eigen::Vector<double, 5> SystemModel::f(const SystemState& state, const SystemIn
     // clang-format off
     state_dot <<   state.velocity() * std::cos(state.yaw()), 
                    state.velocity() * std::sin(state.yaw()), 
-                   state.velocity() * std::tan(state.delta()) / car_length_ ,
+                   state.velocity() * std::tan(state.delta()) / vehicle_length_ ,
                    input.acceleration(), 
                    input.steering_rate();
     // clang-format on
@@ -44,11 +46,11 @@ ModelMatrices SystemModel::getSystemJacobian(const SystemState& state, const Sys
     Eigen::Matrix<double, 5, 1> gc, gd;
 
     // clang-format off
-    Ac <<  0, 0, -state.velocity() * std::sin(state.yaw()),                 std::cos(state.yaw()),                                                                                    0, 
-           0, 0,  state.velocity() * std::cos(state.yaw()),                 std::sin(state.yaw()),                                                                                    0, 
-           0, 0,                                         0, std::tan(state.delta()) / car_length_, state.velocity() / (car_length_ * std::cos(state.delta()) * std::cos(state.delta())),
-           0, 0,                                         0,                                     0,                                                                                    0, 
-           0, 0,                                         0,                                     0,                                                                                    0;
+    Ac <<  0, 0, -state.velocity() * std::sin(state.yaw()),                     std::cos(state.yaw()),                                                                                        0, 
+           0, 0,  state.velocity() * std::cos(state.yaw()),                     std::sin(state.yaw()),                                                                                        0, 
+           0, 0,                                         0, std::tan(state.delta()) / vehicle_length_, state.velocity() / (vehicle_length_ * std::cos(state.delta()) * std::cos(state.delta())),
+           0, 0,                                         0,                                         0,                                                                                        0, 
+           0, 0,                                         0,                                         0,                                                                                        0;
     // clang-format on	
 
     // clang-format off
