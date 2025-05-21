@@ -6,14 +6,9 @@
 
 #include "optimal_parking/system/system_input.hpp"
 #include "optimal_parking/system/system_state.hpp"
+#include "optimal_parking/types.hpp"
 
 namespace optimal_parking {
-
-struct ModelMatrices {
-    Eigen::Matrix<double, 5, 5> Ad;
-    Eigen::Matrix<double, 5, 2> Bd;
-    Eigen::Matrix<double, 5, 1> gd;
-};
 
 class SystemModel {
 public:
