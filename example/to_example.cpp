@@ -4,6 +4,7 @@
 #include <optimal_parking/system/system_model.hpp>
 #include <optimal_parking/system/system_state.hpp>
 #include <optimal_parking/trajectory_optimizer.hpp>
+#include <optimal_parking/types.hpp>
 #include <optimal_parking/utils.hpp>
 
 #include <Eigen/Core>
@@ -14,6 +15,30 @@
 
 namespace plt = matplotlibcpp;
 using namespace optimal_parking;
+
+void plot_obstacles(const std::vector<Obstacle>& obstacles) {
+    for (const auto& obstacle : obstacles) {
+        Eigen::MatrixXd rect(2, 5);
+        rect.row(0) << -obstacle.length / 2, -obstacle.length / 2, obstacle.length / 2, obstacle.length / 2, -obstacle.length / 2;
+        rect.row(1) << -obstacle.width / 2, obstacle.width / 2, obstacle.width / 2, -obstacle.width / 2, -obstacle.width / 2;
+
+        Eigen::Matrix2d rotate;
+        rotate << std::cos(obstacle.yaw), -std::sin(obstacle.yaw), std::sin(obstacle.yaw), std::cos(obstacle.yaw);
+        rect = rotate * rect;
+
+        rect.row(0).array() += obstacle.center(0);
+        rect.row(1).array() += obstacle.center(1);
+
+        std::vector<double> rect_x(rect.cols());
+        std::vector<double> rect_y(rect.cols());
+        for (int i = 0; i < rect.cols(); ++i) {
+            rect_x[i] = rect(0, i);
+            rect_y[i] = rect(1, i);
+        }
+
+        plt::plot(rect_x, rect_y, "r-");
+    }
+}
 
 void plot_car(const double& car_length,
               const double& car_width,
@@ -118,7 +143,7 @@ int main() {
     double car_width = config["car_width"].as<double>();
     double Ts = config["Ts"].as<double>();
     int target_point_idx = 0;
-
+    std::vector<Obstacle> obstacles;
     Eigen::Vector<double, 5> initial_pose =
         Eigen::Map<Eigen::Vector<double, 5>>(config["initial_pose"].as<std::vector<double>>().data());
     Eigen::Vector<double, 5> goal_pose =
@@ -132,6 +157,14 @@ int main() {
     auto [traj_x, traj_y, traj_yaw, traj_acc, traj_steering_rate] = optimizer.getTrajectoryData();
     int len = traj_x.size();
     Eigen::Vector<double, 5> current_state = initial_pose;
+    for (const auto& obs : config["obstacles"]) {
+        Obstacle obstacle;
+        obstacle.center = Eigen::Map<Eigen::Vector2d>(obs["center"].as<std::vector<double>>().data());
+        obstacle.length = obs["length"].as<double>();
+        obstacle.width = obs["width"].as<double>();
+        obstacle.yaw = obs["yaw"].as<double>();
+        obstacles.push_back(obstacle);
+    }
 
     plt::figure_size(1440, 1080);
     std::map<std::string, std::string> options;
@@ -143,6 +176,7 @@ int main() {
     for (int i = 0; i < len; i++) {
         plt::cla();
         plt::plot(traj_x, traj_y, options);
+        plot_obstacles(obstacles);
 
         plot_car(car_length, car_width, current_state[0], current_state[1], current_state[2], current_state[4]);
         plot_car(car_length, car_width, goal_pose(0), goal_pose(1), goal_pose(2), goal_pose(4), "r-");
@@ -150,8 +184,8 @@ int main() {
         Eigen::Vector2d input(traj_acc[i], traj_steering_rate[i]);
         current_state = utils::RK4(system, current_state, input, Ts);
         plt::axis("equal");
-        plt::xlim(-5, 20);
-        plt::ylim(-5, 20);
+        plt::xlim(-20, 20);
+        plt::ylim(-20, 20);
         plt::grid(true);
         plt::pause(0.01);
     }
