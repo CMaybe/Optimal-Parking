@@ -7,10 +7,10 @@ goal_pose: [0, 0., 0, 0, 0]
 trajectory_time: 70
 Ts: 0.1
 
-state_lowerbound: [-100.0, -100.0, -100, -1.0, -1.0]
-state_upperbound: [100.0, 100.0, 100, 1.0, 1.0]
+state_lowerbound: [-100.0, -100.0, -100, -0.63792, -0.63792]
+state_upperbound: [100.0, 100.0, 100, 0.63792, 0.63792]
 input_lowerbound: [-1.0, -1.0]
-input_upperbound: [1.0, 1.0]
+input_upperbound: [2.0, 2.0]
 
 
 state_weight: [0.0, 0.0, 0.0, 0.0, 0.0]
@@ -19,7 +19,7 @@ input_weight: [1.0, 10.0]
 n_sqp: 100
 max_iteration: 1000
 rho_goal: 10000.0
-rho_obs: 100.0
+rho_obs: 10.0
 
 
 obstacles:
@@ -33,6 +33,10 @@ obstacles:
     yaw: 0.0
   - center: [0.0, -4.0]
     length: 4.0
+    width: 3.0
+    yaw: 0.0
+  - center: [0.0, 8.0]
+    length: 10.0
     width: 3.0
     yaw: 0.0
 safety_margin: 0.0
