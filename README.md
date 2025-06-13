@@ -95,7 +95,7 @@ state_weight: [0.0, 0.0, 0.0, 0.0, 0.0]
 input_weight: [1.0, 10.0]
 
 n_sqp: 100
-max_iteration: 1000
+qp_iteration: 1000
 rho_goal: 10000.0
 rho_obs: 10.0
 

@@ -22,7 +22,9 @@ public:
     void updateTrajectoryData();
     QPData setupQP(const SystemModel& system_model, Eigen::Matrix<double, 5, 5>& Q, Eigen::Matrix<double, 2, 2>& R);
 
-    TrajectoryData getTrajectoryData() const { return {path_x_, path_y_, path_yaw_, acceleration_, steering_rate_}; }
+    TrajectoryData getTrajectoryData() const {
+        return {path_x_, path_y_, path_yaw_, velocity_, steering_angle_, acceleration_, steering_rate_};
+    }
     inline const Eigen::VectorXd& getOptimalSolution() const { return optimal_solution_; }
     inline const std::vector<double>& getPathX() const { return path_x_; }
     inline const std::vector<double>& getPathY() const { return path_y_; }
@@ -32,7 +34,7 @@ private:
     double trajectory_time_;
     double Ts_;
     int n_sqp_;
-    int max_iteration_;
+    int qp_iteration_;
     double rho_goal_, rho_obs_;
     Eigen::Vector<double, 5> state_lowerbound_, state_upperbound_;
     Eigen::Vector<double, 2> input_lowerbound_, input_upperbound_;
@@ -69,6 +71,8 @@ private:
     std::vector<double> path_x_;
     std::vector<double> path_y_;
     std::vector<double> path_yaw_;
+    std::vector<double> velocity_;
+    std::vector<double> steering_angle_;
     std::vector<double> acceleration_;
     std::vector<double> steering_rate_;
 

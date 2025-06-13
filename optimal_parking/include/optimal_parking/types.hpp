@@ -24,6 +24,8 @@ struct TrajectoryData {
     std::vector<double> path_x;
     std::vector<double> path_y;
     std::vector<double> path_yaw;
+    std::vector<double> velocity;
+    std::vector<double> steering_angle;
 
     std::vector<double> acceleration;
     std::vector<double> steering_rate;
