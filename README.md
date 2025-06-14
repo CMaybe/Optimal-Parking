@@ -91,8 +91,12 @@ goal_pose: [0, 0., 0, 0, 0]
 trajectory_time: 70
 Ts: 0.1
 
-state_lowerbound: [-100.0, -100.0, -100, -0.63792, -0.63792]
-state_upperbound: [100.0, 100.0, 100, 0.63792, 0.63792]
+
+# x and y position, orientation, velocity, and acceleration
+state_lowerbound: [-100.0, -100.0, -3.15, -10, -0.63792]
+state_upperbound: [100.0, 100.0, 3.15, 10, 0.63792]
+
+# input: acceleration and steering angle
 input_lowerbound: [-1.0, -1.0]
 input_upperbound: [2.0, 2.0]
 

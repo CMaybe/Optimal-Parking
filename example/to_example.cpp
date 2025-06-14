@@ -154,7 +154,7 @@ int main() {
     optimizer.setInitialPose(initial_pose);
     optimizer.setGoalPose(goal_pose);
     optimizer.runSQP(system);
-    auto [traj_x, traj_y, traj_yaw, traj_acc, traj_steering_rate] = optimizer.getTrajectoryData();
+    auto [traj_x, traj_y, traj_yaw, _1, _2, traj_acc, traj_steering_rate] = optimizer.getTrajectoryData();
     int len = traj_x.size();
     Eigen::Vector<double, 5> current_state = initial_pose;
     for (const auto& obs : config["obstacles"]) {

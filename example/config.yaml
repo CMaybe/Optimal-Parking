@@ -9,7 +9,7 @@ Ts: 0.1
 
 
 # x and y position, orientation, velocity, and acceleration
-state_lowerbound: [-100.0, -100.0, -3.15, 10, -0.63792]
+state_lowerbound: [-100.0, -100.0, -3.15, -10, -0.63792]
 state_upperbound: [100.0, 100.0, 3.15, 10, 0.63792]
 
 # input: acceleration and steering angle
