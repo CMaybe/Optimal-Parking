@@ -31,13 +31,12 @@ public:
     }
 
 private:
+    Eigen::Vector<double, 5> system_state_;
     double x_;
     double y_;
     double yaw_;
     double velocity_;
     double delta_;
-
-    Eigen::Vector<double, 5> system_state_;
 };
 
 }  // namespace optimal_parking

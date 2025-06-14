@@ -24,6 +24,12 @@ To build and run this project, the following dependencies are required:
 - **matplotlibcpp**: For real-time visualization ([matplotlibcpp GitHub](https://github.com/lava/matplotlib-cpp)).
 - **Python3**: For `matplotlibcpp` and `numpy` integration.
 
+## Documentation
+
+For detailed information about the project, including system architecture, mathematical models, and configuration examples, please refer to the PDF files in the `docs` folder:
+
+- [English Documentation](docs/en.pdf)
+- [Korean Documentation](docs/kor.pdf)
 
 ## Getting Started on Devcontainer (Recommended)
 This repository is configured with a `devcontainer` for Visual Studio Code, allowing you to quickly set up and use the development environment using Docker.
@@ -85,8 +91,12 @@ goal_pose: [0, 0., 0, 0, 0]
 trajectory_time: 70
 Ts: 0.1
 
-state_lowerbound: [-100.0, -100.0, -100, -0.63792, -0.63792]
-state_upperbound: [100.0, 100.0, 100, 0.63792, 0.63792]
+
+# x and y position, orientation, velocity, and acceleration
+state_lowerbound: [-100.0, -100.0, -3.15, -10, -0.63792]
+state_upperbound: [100.0, 100.0, 3.15, 10, 0.63792]
+
+# input: acceleration and steering angle
 input_lowerbound: [-1.0, -1.0]
 input_upperbound: [2.0, 2.0]
 
@@ -95,7 +105,7 @@ state_weight: [0.0, 0.0, 0.0, 0.0, 0.0]
 input_weight: [1.0, 10.0]
 
 n_sqp: 100
-max_iteration: 1000
+qp_iteration: 1000
 rho_goal: 10000.0
 rho_obs: 10.0
 

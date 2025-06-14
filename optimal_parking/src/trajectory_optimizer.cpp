@@ -21,7 +21,7 @@ TrajectoryOptimizer::TrajectoryOptimizer(const std::string& config_path) {
     input_upperbound_ = Eigen::Map<Eigen::Vector<double, 2>>(config["input_upperbound"].as<std::vector<double>>().data());
 
     n_sqp_ = config["n_sqp"].as<int>();
-    max_iteration_ = config["max_iteration"].as<int>();
+    qp_iteration_ = config["qp_iteration"].as<int>();
     rho_goal_ = config["rho_goal"].as<double>();
     rho_obs_ = config["rho_obs"].as<double>();
     safety_margin_ = config["safety_margin"].as<double>();
@@ -111,11 +111,8 @@ void TrajectoryOptimizer::runSQP(const SystemModel& system_model) {
         return;
     }
     optimal_solution_ = initial_guess_;
-    std::cout << "Final goal pose: " << optimal_solution_.segment(nx_ - state_dim_, state_dim_).transpose() << std::endl;
 
     for (int iter = 0; iter < n_sqp_; ++iter) {
-        std::cout << "SQP Iteration: " << iter << std::endl;
-
         auto [hessian, gradient, linearMatrix, lowerBound, upperBound] = setupQP(system_model, Q_, R_);
 
         Eigen::SparseMatrix<double> hessian_sparse = hessian.sparseView();
@@ -125,7 +122,7 @@ void TrajectoryOptimizer::runSQP(const SystemModel& system_model) {
 
         solver->settings()->setWarmStart(true);
         solver->settings()->setVerbosity(false);
-        solver->settings()->setMaxIteration(max_iteration_);
+        solver->settings()->setMaxIteration(qp_iteration_);
         solver->settings()->setAbsoluteTolerance(1e-3);
         solver->settings()->setRelativeTolerance(1e-3);
         solver->data()->setNumberOfVariables(total_vars_all_slack_);
@@ -143,8 +140,13 @@ void TrajectoryOptimizer::runSQP(const SystemModel& system_model) {
         }
 
         Eigen::VectorXd delta_solution = solver->getSolution();
+        std::cout << "Iteration " << iter << ": delta_solution norm = " << delta_solution.norm() << std::endl;
 
         // Todo: Backtracking line search
+        if (delta_solution.norm() < 0.05) {
+            std::cout << "Delta solution norm: " << delta_solution.norm() << "\nConverged at iteration " << iter << "\n";
+            break;
+        }
         optimal_solution_ = optimal_solution_ + 0.1 * delta_solution.head(total_vars_);
 
         for (int i = 0; i < nx_; ++i) {
@@ -155,8 +157,6 @@ void TrajectoryOptimizer::runSQP(const SystemModel& system_model) {
             optimal_solution_(nx_ + i) = std::max(input_lowerbound_(i % input_dim_),
                                                   std::min(input_upperbound_(i % input_dim_), optimal_solution_(nx_ + i)));
         }
-
-        std::cout << "Final goal pose: " << optimal_solution_.segment(nx_ - state_dim_, state_dim_).transpose() << std::endl;
     }
 
     updateTrajectoryData();
@@ -173,6 +173,8 @@ void TrajectoryOptimizer::updateTrajectoryData() {
         path_x_.push_back(optimal_solution_(state_dim_ * i));
         path_y_.push_back(optimal_solution_(state_dim_ * i + 1));
         path_yaw_.push_back(optimal_solution_(state_dim_ * i + 2));
+        velocity_.push_back(optimal_solution_(state_dim_ * i + 3));
+        steering_angle_.push_back(optimal_solution_(state_dim_ * i + 4));
 
         if (i < prediction_horizon_) {
             acceleration_.push_back(optimal_solution_(nx_ + input_dim_ * i));
