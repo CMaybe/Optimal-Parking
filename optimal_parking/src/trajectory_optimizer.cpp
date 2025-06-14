@@ -140,6 +140,7 @@ void TrajectoryOptimizer::runSQP(const SystemModel& system_model) {
         }
 
         Eigen::VectorXd delta_solution = solver->getSolution();
+        std::cout << "Iteration " << iter << ": delta_solution norm = " << delta_solution.norm() << std::endl;
 
         // Todo: Backtracking line search
         if (delta_solution.norm() < 0.05) {
