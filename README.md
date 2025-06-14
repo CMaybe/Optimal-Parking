@@ -24,6 +24,12 @@ To build and run this project, the following dependencies are required:
 - **matplotlibcpp**: For real-time visualization ([matplotlibcpp GitHub](https://github.com/lava/matplotlib-cpp)).
 - **Python3**: For `matplotlibcpp` and `numpy` integration.
 
+## Documentation
+
+For detailed information about the project, including system architecture, mathematical models, and configuration examples, please refer to the PDF files in the `docs` folder:
+
+- [English Documentation](docs/en.pdf)
+- [Korean Documentation](docs/kor.pdf)
 
 ## Getting Started on Devcontainer (Recommended)
 This repository is configured with a `devcontainer` for Visual Studio Code, allowing you to quickly set up and use the development environment using Docker.
