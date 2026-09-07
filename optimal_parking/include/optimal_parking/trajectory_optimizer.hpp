@@ -20,7 +20,9 @@ public:
     void set_obstacles(const std::vector<Obstacle>& obstacles);
     void run_sqp(const SystemModel& system_model);
     void update_trajectory_data();
-    QPData setup_qp(const SystemModel& system_model, Eigen::Matrix<double, 5, 5>& q, Eigen::Matrix<double, 2, 2>& r);
+    QPData setup_qp(const SystemModel& system_model,
+                   const Eigen::Matrix<double, 5, 5>& q,
+                   const Eigen::Matrix<double, 2, 2>& r);
 
     [[nodiscard]] TrajectoryData get_trajectory_data() const {
         return {path_x_, path_y_, path_yaw_, velocity_, steering_angle_, acceleration_, steering_rate_};
@@ -31,6 +33,8 @@ public:
     [[nodiscard]] inline const std::vector<double>& get_path_yaw() const { return path_yaw_; }
 
 private:
+    void update_problem_dimensions();
+
     double trajectory_time_;
     double ts_;
     int n_sqp_;
@@ -41,12 +45,10 @@ private:
     std::vector<Obstacle> obstacles_;
     double safety_margin_;
 
-    Eigen::VectorXd initial_guess_, optimal_solution_;
+    Eigen::VectorXd optimal_solution_;
 
     Eigen::Vector<double, 5> x0_;
     Eigen::Vector<double, 5> x_goal_;
-    Eigen::Vector<double, 2> u_goal_;
-
     Eigen::Matrix<double, 5, 5> q_;
     Eigen::Matrix<double, 2, 2> r_;
 
@@ -62,7 +64,6 @@ private:
     Eigen::Index n_slack_;
     Eigen::Index n_obstacle_constraints_;
     Eigen::Index n_obstacle_slack_;
-    Eigen::Index total_vars_slack_;
     Eigen::Index total_vars_all_slack_;
     Eigen::Index total_constraints_;
 

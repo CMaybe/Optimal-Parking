@@ -46,30 +46,20 @@ TrajectoryOptimizer::TrajectoryOptimizer(const std::string& config_path) {
     state_dim_ = 5;
     input_dim_ = 2;
 
-    nx_ = state_dim_ * (prediction_horizon_ + 1);
-    nu_ = input_dim_ * prediction_horizon_;
-    total_vars_ = nx_ + nu_;
-
-    n_eq_ = state_dim_ * (prediction_horizon_ + 1) + state_dim_;
-    n_ineq_ = total_vars_;
-    n_slack_ = state_dim_;
-    total_vars_slack_ = total_vars_ + n_slack_;
-
-    n_obstacle_constraints_ = (prediction_horizon_ + 1) * static_cast<Eigen::Index>(obstacles_.size());
-    n_obstacle_slack_ = n_obstacle_constraints_;
-    total_vars_all_slack_ = total_vars_ + n_slack_ + n_obstacle_slack_;
-    total_constraints_ = n_eq_ + n_ineq_ + n_obstacle_constraints_ + n_obstacle_slack_;
+    update_problem_dimensions();
 
     x_goal_.setZero();
     x0_.setZero();
-    u_goal_.setZero();
-    initial_guess_.setZero(total_vars_);
     optimal_solution_.setZero(total_vars_);
 }
 
 void TrajectoryOptimizer::set_obstacles(const std::vector<Obstacle>& obstacles) {
     obstacles_ = obstacles;
     rrt_star_->set_obstacles(obstacles_);
+    update_problem_dimensions();
+}
+
+void TrajectoryOptimizer::update_problem_dimensions() {
     n_obstacle_constraints_ = (prediction_horizon_ + 1) * static_cast<Eigen::Index>(obstacles_.size());
     n_obstacle_slack_ = n_obstacle_constraints_;
     total_vars_all_slack_ = total_vars_ + n_slack_ + n_obstacle_slack_;
@@ -80,27 +70,23 @@ void TrajectoryOptimizer::set_goal_pose(const Eigen::Vector<double, 5>& goal_pos
 void TrajectoryOptimizer::set_initial_pose(const Eigen::Vector<double, 5>& initial_pose) { x0_ = initial_pose; }
 
 void TrajectoryOptimizer::run_sqp(const SystemModel& system_model) {
-    initial_guess_.setZero(total_vars_);
-    optimal_solution_.resize(total_vars_);
+    optimal_solution_.setZero(total_vars_);
     vehicle_radius_ = 0.5 * std::hypot(system_model.vehicle_length(), system_model.vehicle_width());
 
-    std::vector<std::shared_ptr<Node>> nodes;
     Eigen::Vector3d start(x0_(0), x0_(1), x0_(2));
     Eigen::Vector3d goal(x_goal_(0), x_goal_(1), x_goal_(2));
     std::vector<Eigen::Vector3d> path = rrt_star_->make_path(start, goal, prediction_horizon_ + 1);
     if (path.size() == static_cast<std::size_t>(prediction_horizon_ + 1)) {
-        initial_guess_.segment(0, state_dim_) = x0_;
+        optimal_solution_.segment(0, state_dim_) = x0_;
         for (int i = 0; i <= prediction_horizon_; ++i) {
-            initial_guess_(state_dim_ * i) = path[i](0);
-            initial_guess_(state_dim_ * i + 1) = path[i](1);
-            initial_guess_(state_dim_ * i + 2) = path[i](2);
+            optimal_solution_(state_dim_ * i) = path[i](0);
+            optimal_solution_(state_dim_ * i + 1) = path[i](1);
+            optimal_solution_(state_dim_ * i + 2) = path[i](2);
         }
     } else {
         std::cerr << "RRT* path planning failed to produce the requested horizon." << std::endl;
         return;
     }
-    optimal_solution_ = initial_guess_;
-
     for (int iter = 0; iter < n_sqp_; ++iter) {
         auto [hessian, gradient, linearMatrix, lowerBound, upperBound] = setup_qp(system_model, q_, r_);
 
@@ -162,31 +148,33 @@ void TrajectoryOptimizer::run_sqp(const SystemModel& system_model) {
 }
 
 void TrajectoryOptimizer::update_trajectory_data() {
-    path_x_.clear();
-    path_y_.clear();
-    path_yaw_.clear();
-    velocity_.clear();
-    steering_angle_.clear();
-    acceleration_.clear();
-    steering_rate_.clear();
+    const auto state_count = static_cast<std::size_t>(prediction_horizon_ + 1);
+    const auto input_count = static_cast<std::size_t>(prediction_horizon_);
+    path_x_.resize(state_count);
+    path_y_.resize(state_count);
+    path_yaw_.resize(state_count);
+    velocity_.resize(state_count);
+    steering_angle_.resize(state_count);
+    acceleration_.resize(input_count);
+    steering_rate_.resize(input_count);
 
     for (int i = 0; i <= prediction_horizon_; ++i) {
-        path_x_.push_back(optimal_solution_(state_dim_ * i));
-        path_y_.push_back(optimal_solution_(state_dim_ * i + 1));
-        path_yaw_.push_back(optimal_solution_(state_dim_ * i + 2));
-        velocity_.push_back(optimal_solution_(state_dim_ * i + 3));
-        steering_angle_.push_back(optimal_solution_(state_dim_ * i + 4));
+        path_x_[i] = optimal_solution_(state_dim_ * i);
+        path_y_[i] = optimal_solution_(state_dim_ * i + 1);
+        path_yaw_[i] = optimal_solution_(state_dim_ * i + 2);
+        velocity_[i] = optimal_solution_(state_dim_ * i + 3);
+        steering_angle_[i] = optimal_solution_(state_dim_ * i + 4);
 
         if (i < prediction_horizon_) {
-            acceleration_.push_back(optimal_solution_(nx_ + input_dim_ * i));
-            steering_rate_.push_back(optimal_solution_(nx_ + input_dim_ * i + 1));
+            acceleration_[i] = optimal_solution_(nx_ + input_dim_ * i);
+            steering_rate_[i] = optimal_solution_(nx_ + input_dim_ * i + 1);
         }
     }
 }
 
 QPData TrajectoryOptimizer::setup_qp(const SystemModel& system_model,
-                                     Eigen::Matrix<double, 5, 5>& q,
-                                     Eigen::Matrix<double, 2, 2>& r) {
+                                     const Eigen::Matrix<double, 5, 5>& q,
+                                     const Eigen::Matrix<double, 2, 2>& r) {
     Eigen::MatrixXd h = Eigen::MatrixXd::Zero(total_vars_all_slack_, total_vars_all_slack_);
     Eigen::VectorXd f = Eigen::VectorXd::Zero(total_vars_all_slack_);
 
