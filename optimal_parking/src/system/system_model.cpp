@@ -1,6 +1,6 @@
 #include "optimal_parking/system/system_model.hpp"
 
-#include <iostream>
+#include <cmath>
 #include <unsupported/Eigen/MatrixFunctions>
 
 #include "optimal_parking/config.hpp"
@@ -12,8 +12,6 @@ SystemModel::SystemModel(const std::string& path) {
 }
 SystemModel::SystemModel(double vehicle_length, double vehicle_width)
     : vehicle_length_(vehicle_length), vehicle_width_(vehicle_width) {}
-SystemModel::SystemModel(const SystemModel& other) = default;
-
 void SystemModel::initialize(const std::string& path) {
     const PlannerConfig config = load_planner_config(path);
     vehicle_length_ = config.vehicle_length;

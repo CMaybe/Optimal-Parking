@@ -41,8 +41,7 @@ struct Obstacle {
 struct Node {
     Eigen::Vector3d state;
     std::shared_ptr<Node> parent;
-    std::vector<std::shared_ptr<Node>> children;
     double cost;
 };
 
-};  // namespace optimal_parking
+}  // namespace optimal_parking

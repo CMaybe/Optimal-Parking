@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Eigen/Dense>
-#include <cmath>
+#include <string>
 
 #include "optimal_parking/system/system_input.hpp"
 #include "optimal_parking/system/system_state.hpp"
@@ -14,7 +14,6 @@ public:
     SystemModel() = default;
     SystemModel(double vehicle_length, double vehicle_width);
     SystemModel(const std::string& path);
-    SystemModel(const SystemModel& other);
     void initialize(const std::string& path);
     void initialize(double vehicle_length, double vehicle_width);
 
@@ -24,8 +23,8 @@ public:
     [[nodiscard]] inline double vehicle_width() const { return vehicle_width_; };
 
 private:
-    double vehicle_length_;
-    double vehicle_width_;
+    double vehicle_length_ = 0.0;
+    double vehicle_width_ = 0.0;
 };
 
 }  // namespace optimal_parking
