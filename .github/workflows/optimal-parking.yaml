@@ -34,7 +34,8 @@ jobs:
             -S ./optimal_parking \
             -B ./optimal_parking/build \
             -G "Unix Makefiles" \
-            -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+            -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+            -DOPTIMAL_PARKING_ENABLE_CLANG_TIDY=ON
 
       - name: Build
         run: |

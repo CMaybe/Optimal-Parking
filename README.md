@@ -16,7 +16,7 @@ Optimal Parking is a project designed to optimize vehicle trajectories for parki
 ## Dependencies
 To build and run this project, the following dependencies are required:
 
-- **C++ Compiler**: A C++17 compatible compiler (e.g., `g++`, `clang`).
+- **C++ Compiler**: A C++20 compatible compiler (e.g., `g++`, `clang`).
 - **CMake**: Version 3.27.4 or higher.
 - **Eigen**: Version 3.4.0 for matrix operations ([Eigen Official Site](https://eigen.tuxfamily.org/)).
 - **yaml-cpp**: For parsing YAML configuration files.
@@ -77,6 +77,17 @@ make -j
 ```bash
 sudo make install # default prefix is /usr/local
 ```
+
+**Run clang-tidy**
+```bash
+cmake -S optimal_parking -B optimal_parking/build \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DOPTIMAL_PARKING_ENABLE_CLANG_TIDY=ON
+cmake --build optimal_parking/build
+```
+
+The clang-tidy checks are configured in `.clang-tidy` and run automatically for
+the library sources when `OPTIMAL_PARKING_ENABLE_CLANG_TIDY` is enabled.
 
 ## Configuration
 The project uses a `config.yaml` file for parameter configuration. Below is an example configuration
