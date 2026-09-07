@@ -1,5 +1,4 @@
-#ifndef SYSTEM_INPUT_HPP
-#define SYSTEM_INPUT_HPP
+#pragma once
 
 #include <Eigen/Dense>
 
@@ -7,16 +6,16 @@ namespace optimal_parking {
 class SystemInput {
 public:
     SystemInput();
-    SystemInput(const double& acceleration, const double& steering_rate);
+    SystemInput(double acceleration, double steering_rate);
     SystemInput(const SystemInput& other);
     SystemInput(const Eigen::Ref<const Eigen::Vector2d>& system_input);
     SystemInput& operator=(const SystemInput& other);
 
-    void updateInput(const double& acceleration, const double& steering_rate);
-    void updateInput(const Eigen::Ref<const Eigen::Vector2d>& system_input);
+    void update_input(double acceleration, double steering_rate);
+    void update_input(const Eigen::Ref<const Eigen::Vector2d>& system_state);
 
-    inline double acceleration() const { return acceleration_; };
-    inline double steering_rate() const { return steering_rate_; };
+    [[nodiscard]] inline double acceleration() const { return acceleration_; };
+    [[nodiscard]] inline double steering_rate() const { return steering_rate_; };
 
     inline const Eigen::Vector2d& operator()() const { return system_input_; };
     inline double operator()(const int& idx) const { return system_input_[idx]; };
@@ -34,5 +33,3 @@ private:
 };
 
 }  // namespace optimal_parking
-
-#endif  // SYSTEM_INPUT_HPP

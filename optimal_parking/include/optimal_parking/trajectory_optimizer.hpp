@@ -15,24 +15,24 @@ namespace optimal_parking {
 class TrajectoryOptimizer {
 public:
     TrajectoryOptimizer(const std::string& config_path);
-    void setGoalPose(const Eigen::Vector<double, 5>& goal_pose);
-    void setInitialPose(const Eigen::Vector<double, 5>& initial_pose);
-    void setObstacles(const std::vector<Obstacle>& obstacles);
-    void runSQP(const SystemModel& system_model);
-    void updateTrajectoryData();
-    QPData setupQP(const SystemModel& system_model, Eigen::Matrix<double, 5, 5>& Q, Eigen::Matrix<double, 2, 2>& R);
+    void set_goal_pose(const Eigen::Vector<double, 5>& goal_pose);
+    void set_initial_pose(const Eigen::Vector<double, 5>& initial_pose);
+    void set_obstacles(const std::vector<Obstacle>& obstacles);
+    void run_sqp(const SystemModel& system_model);
+    void update_trajectory_data();
+    QPData setup_qp(const SystemModel& system_model, Eigen::Matrix<double, 5, 5>& q, Eigen::Matrix<double, 2, 2>& r);
 
-    TrajectoryData getTrajectoryData() const {
+    [[nodiscard]] TrajectoryData get_trajectory_data() const {
         return {path_x_, path_y_, path_yaw_, velocity_, steering_angle_, acceleration_, steering_rate_};
     }
-    inline const Eigen::VectorXd& getOptimalSolution() const { return optimal_solution_; }
-    inline const std::vector<double>& getPathX() const { return path_x_; }
-    inline const std::vector<double>& getPathY() const { return path_y_; }
-    inline const std::vector<double>& getPathYaw() const { return path_yaw_; }
+    [[nodiscard]] inline const Eigen::VectorXd& get_optimal_solution() const { return optimal_solution_; }
+    [[nodiscard]] inline const std::vector<double>& get_path_x() const { return path_x_; }
+    [[nodiscard]] inline const std::vector<double>& get_path_y() const { return path_y_; }
+    [[nodiscard]] inline const std::vector<double>& get_path_yaw() const { return path_yaw_; }
 
 private:
     double trajectory_time_;
-    double Ts_;
+    double ts_;
     int n_sqp_;
     int qp_iteration_;
     double rho_goal_, rho_obs_;
@@ -47,24 +47,24 @@ private:
     Eigen::Vector<double, 5> x_goal_;
     Eigen::Vector<double, 2> u_goal_;
 
-    Eigen::Matrix<double, 5, 5> Q_;
-    Eigen::Matrix<double, 2, 2> R_;
+    Eigen::Matrix<double, 5, 5> q_;
+    Eigen::Matrix<double, 2, 2> r_;
 
-    int prediction_horizon_;
+    Eigen::Index prediction_horizon_;
 
-    int state_dim_;
-    int input_dim_;
+    Eigen::Index state_dim_;
+    Eigen::Index input_dim_;
 
-    int nx_, nu_, total_vars_;
-    int n_eq_;
-    int n_ineq_;
+    Eigen::Index nx_, nu_, total_vars_;
+    Eigen::Index n_eq_;
+    Eigen::Index n_ineq_;
 
-    int n_slack_;
-    int n_obstacle_constraints_;
-    int n_obstacle_slack_;
-    int total_vars_slack_;
-    int total_vars_all_slack_;
-    int total_constraints_;
+    Eigen::Index n_slack_;
+    Eigen::Index n_obstacle_constraints_;
+    Eigen::Index n_obstacle_slack_;
+    Eigen::Index total_vars_slack_;
+    Eigen::Index total_vars_all_slack_;
+    Eigen::Index total_constraints_;
 
     double vehicle_radius_;
 

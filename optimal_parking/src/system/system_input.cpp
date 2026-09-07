@@ -4,8 +4,7 @@ namespace optimal_parking {
 
 SystemInput::SystemInput() : acceleration_(0), steering_rate_(0) { system_input_.setZero(); }
 
-SystemInput::SystemInput(const double& acceleration, const double& steering_rate)
-    : acceleration_(acceleration), steering_rate_(steering_rate) {
+SystemInput::SystemInput(double acceleration, double steering_rate) : acceleration_(acceleration), steering_rate_(steering_rate) {
     system_input_ << acceleration, steering_rate;
 }
 
@@ -19,19 +18,21 @@ SystemInput::SystemInput(const Eigen::Ref<const Eigen::Vector2d>& system_input)
 }
 
 SystemInput& SystemInput::operator=(const SystemInput& other) {
-    if (this == &other) return *this;
+    if (this == &other) {
+        return *this;
+    }
     acceleration_ = other.acceleration_;
     steering_rate_ = other.steering_rate_;
     return *this;
 }
 
-void SystemInput::updateInput(const double& acceleration, const double& steering_rate) {
+void SystemInput::update_input(double acceleration, double steering_rate) {
     acceleration_ = acceleration;
     steering_rate_ = steering_rate;
     system_input_ << acceleration, steering_rate;
 }
 
-void SystemInput::updateInput(const Eigen::Ref<const Eigen::Vector2d>& system_state) {
+void SystemInput::update_input(const Eigen::Ref<const Eigen::Vector2d>& system_state) {
     acceleration_ = system_state[0];
     steering_rate_ = system_state[1];
     system_input_ = system_state;

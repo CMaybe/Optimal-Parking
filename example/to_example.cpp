@@ -151,10 +151,10 @@ int main() {
 
     SystemModel system(vehicle_length, vehicle_width);
     TrajectoryOptimizer optimizer("../config.yaml");
-    optimizer.setInitialPose(initial_pose);
-    optimizer.setGoalPose(goal_pose);
-    optimizer.runSQP(system);
-    auto [traj_x, traj_y, traj_yaw, _1, _2, traj_acc, traj_steering_rate] = optimizer.getTrajectoryData();
+    optimizer.set_initial_pose(initial_pose);
+    optimizer.set_goal_pose(goal_pose);
+    optimizer.run_sqp(system);
+    auto [traj_x, traj_y, traj_yaw, _1, _2, traj_acc, traj_steering_rate] = optimizer.get_trajectory_data();
     int len = traj_x.size();
     Eigen::Vector<double, 5> current_state = initial_pose;
     for (const auto& obs : config["obstacles"]) {
@@ -182,7 +182,7 @@ int main() {
         plot_vehicle(vehicle_length, vehicle_width, goal_pose(0), goal_pose(1), goal_pose(2), goal_pose(4), "r-");
         plot_vehicle(vehicle_length, vehicle_width, initial_pose(0), initial_pose(1), initial_pose(2), initial_pose(4), "g-");
         Eigen::Vector2d input(traj_acc[i], traj_steering_rate[i]);
-        current_state = utils::RK4(system, current_state, input, Ts);
+        current_state = Utils::r_k4(system, current_state, input, Ts);
         plt::axis("equal");
         plt::xlim(-20, 20);
         plt::ylim(-20, 20);

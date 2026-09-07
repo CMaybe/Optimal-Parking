@@ -2,7 +2,7 @@
 
 namespace optimal_parking {
 SystemState::SystemState() : x_(0), y_(0), yaw_(0), velocity_(0), delta_(0) { system_state_.setZero(); }
-SystemState::SystemState(const double& x, const double& y, const double& yaw, const double& velocity, const double& delta)
+SystemState::SystemState(double x, double y, double yaw, double velocity, double delta)
     : x_(x), y_(y), yaw_(yaw), velocity_(velocity), delta_(delta) {
     system_state_ << x, y, yaw, velocity, delta;
 }
@@ -18,7 +18,9 @@ SystemState::SystemState(const Eigen::Ref<const Eigen::Vector<double, 5>>& syste
 }
 
 SystemState& SystemState::operator=(const SystemState& other) {
-    if (this == &other) return *this;
+    if (this == &other) {
+        return *this;
+    }
     x_ = other.x_;
     y_ = other.y_;
     yaw_ = other.yaw_;
@@ -37,7 +39,7 @@ SystemState& SystemState::operator=(const Eigen::Vector<double, 5>& system_state
     return *this;
 }
 
-void SystemState::updateState(const double& x, const double& y, const double& yaw, const double& velocity, const double& delta) {
+void SystemState::update_state(double x, double y, double yaw, double velocity, double delta) {
     x_ = x;
     y_ = y;
     yaw_ = yaw;
@@ -47,7 +49,7 @@ void SystemState::updateState(const double& x, const double& y, const double& ya
     system_state_ << x_, y_, yaw_, velocity_, delta_;
 }
 
-void SystemState::updateState(const Eigen::Ref<const Eigen::Vector<double, 5>>& system_state) {
+void SystemState::update_state(const Eigen::Ref<const Eigen::Vector<double, 5>>& system_state) {
     system_state_ = system_state;
     x_ = system_state[0];
     y_ = system_state[1];
