@@ -23,6 +23,7 @@ SystemInput& SystemInput::operator=(const SystemInput& other) {
     }
     acceleration_ = other.acceleration_;
     steering_rate_ = other.steering_rate_;
+    system_input_ = other.system_input_;
     return *this;
 }
 

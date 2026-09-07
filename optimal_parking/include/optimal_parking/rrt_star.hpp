@@ -24,6 +24,7 @@ public:
             const int& max_iterations,
             const double& vehicle_length,
             const double& vehicle_width);
+    void set_obstacles(const std::vector<Obstacle>& obstacles);
     bool check_collision(const Eigen::Vector3d& state);
     bool check_path_collision(const Eigen::Vector3d& from, const Eigen::Vector3d& to);
     [[nodiscard]] Eigen::Vector3d step(const Eigen::Vector3d& from, const Eigen::Vector3d& to) const;

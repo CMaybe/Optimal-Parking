@@ -82,6 +82,7 @@ TrajectoryOptimizer::TrajectoryOptimizer(const std::string& config_path) {
 
 void TrajectoryOptimizer::set_obstacles(const std::vector<Obstacle>& obstacles) {
     obstacles_ = obstacles;
+    rrt_star_->set_obstacles(obstacles_);
     n_obstacle_constraints_ = (prediction_horizon_ + 1) * static_cast<Eigen::Index>(obstacles_.size());
     n_obstacle_slack_ = n_obstacle_constraints_;
     total_vars_all_slack_ = total_vars_ + n_slack_ + n_obstacle_slack_;
@@ -94,20 +95,21 @@ void TrajectoryOptimizer::set_initial_pose(const Eigen::Vector<double, 5>& initi
 void TrajectoryOptimizer::run_sqp(const SystemModel& system_model) {
     initial_guess_.setZero(total_vars_);
     optimal_solution_.resize(total_vars_);
-    vehicle_radius_ = std::sqrt(std::pow(system_model.vehicle_length(), 2) + std::pow(system_model.vehicle_width(), 2));
+    vehicle_radius_ = 0.5 * std::hypot(system_model.vehicle_length(), system_model.vehicle_width());
 
     std::vector<std::shared_ptr<Node>> nodes;
     Eigen::Vector3d start(x0_(0), x0_(1), x0_(2));
     Eigen::Vector3d goal(x_goal_(0), x_goal_(1), x_goal_(2));
     std::vector<Eigen::Vector3d> path = rrt_star_->make_path(start, goal, prediction_horizon_ + 1);
-    if (!path.empty()) {
+    if (path.size() == static_cast<std::size_t>(prediction_horizon_ + 1)) {
+        initial_guess_.segment(0, state_dim_) = x0_;
         for (int i = 0; i <= prediction_horizon_; ++i) {
             initial_guess_(state_dim_ * i) = path[i](0);
             initial_guess_(state_dim_ * i + 1) = path[i](1);
             initial_guess_(state_dim_ * i + 2) = path[i](2);
         }
     } else {
-        std::cerr << "RRT* path planning failed." << std::endl;
+        std::cerr << "RRT* path planning failed to produce the requested horizon." << std::endl;
         return;
     }
     optimal_solution_ = initial_guess_;
@@ -132,7 +134,10 @@ void TrajectoryOptimizer::run_sqp(const SystemModel& system_model) {
         solver->data()->setLinearConstraintsMatrix(linear_sparse);
         solver->data()->setLowerBound(lowerBound);
         solver->data()->setUpperBound(upperBound);
-        solver->initSolver();
+        if (!solver->initSolver()) {
+            std::cerr << "QP initialization failed at iteration " << iter << std::endl;
+            return;
+        }
 
         if (solver->solveProblem() != OsqpEigen::ErrorExitFlag::NoError) {
             std::cerr << "QP failed at iteration " << iter << std::endl;
@@ -140,14 +145,37 @@ void TrajectoryOptimizer::run_sqp(const SystemModel& system_model) {
         }
 
         Eigen::VectorXd delta_solution = solver->getSolution();
-        std::cout << "Iteration " << iter << ": delta_solution norm = " << delta_solution.norm() << std::endl;
+        const Eigen::VectorXd delta_variables = delta_solution.head(total_vars_);
+        std::cout << "Iteration " << iter << ": delta_solution norm = " << delta_variables.norm() << std::endl;
 
-        // Todo: Backtracking line search
-        if (delta_solution.norm() < 0.05) {
-            std::cout << "Delta solution norm: " << delta_solution.norm() << "\nConverged at iteration " << iter << "\n";
+        if (delta_variables.norm() < 0.05) {
+            std::cout << "Delta solution norm: " << delta_variables.norm() << "\nConverged at iteration " << iter << "\n";
             break;
         }
-        optimal_solution_ = optimal_solution_ + 0.1 * delta_solution.head(total_vars_);
+
+        const auto merit = [](const Eigen::VectorXd& step,
+                              const Eigen::MatrixXd& hessian_matrix,
+                              const Eigen::VectorXd& gradient_vector,
+                              const Eigen::MatrixXd& constraint_matrix,
+                              const Eigen::VectorXd& lower_bound,
+                              const Eigen::VectorXd& upper_bound) {
+            const Eigen::VectorXd constraint_values = constraint_matrix * step;
+            double violation = 0.0;
+            for (Eigen::Index i = 0; i < constraint_values.size(); ++i) {
+                violation += std::max(lower_bound(i) - constraint_values(i), 0.0);
+                violation += std::max(constraint_values(i) - upper_bound(i), 0.0);
+            }
+            return 0.5 * step.dot(hessian_matrix * step) + gradient_vector.dot(step) + 1e4 * violation;
+        };
+
+        const double current_merit =
+            merit(Eigen::VectorXd::Zero(total_vars_all_slack_), hessian, gradient, linearMatrix, lowerBound, upperBound);
+        double step_length = 1.0;
+        while (step_length > 1e-3 &&
+               merit(step_length * delta_solution, hessian, gradient, linearMatrix, lowerBound, upperBound) > current_merit) {
+            step_length *= 0.5;
+        }
+        optimal_solution_ += step_length * delta_variables;
 
         for (int i = 0; i < nx_; ++i) {
             optimal_solution_(i) =
@@ -166,6 +194,8 @@ void TrajectoryOptimizer::update_trajectory_data() {
     path_x_.clear();
     path_y_.clear();
     path_yaw_.clear();
+    velocity_.clear();
+    steering_angle_.clear();
     acceleration_.clear();
     steering_rate_.clear();
 
@@ -202,6 +232,13 @@ QPData TrajectoryOptimizer::setup_qp(const SystemModel& system_model,
         h.block(nx_ + input_dim_ * time_step, nx_ + input_dim_ * time_step, input_dim_, input_dim_) = r;
     }
     h.block(nx_ - state_dim_, nx_ - state_dim_, state_dim_, state_dim_) = q;
+
+    for (int time_step = 0; time_step < prediction_horizon_; ++time_step) {
+        f.segment(state_dim_ * time_step, state_dim_) = q * optimal_solution_.segment(state_dim_ * time_step, state_dim_);
+        f.segment(nx_ + input_dim_ * time_step, input_dim_) =
+            r * optimal_solution_.segment(nx_ + input_dim_ * time_step, input_dim_);
+    }
+    f.segment(nx_ - state_dim_, state_dim_) = q * optimal_solution_.segment(nx_ - state_dim_, state_dim_);
 
     // Slack penalties
     h.block(total_vars_, total_vars_, n_slack_, n_slack_) = rho_goal_ * Eigen::MatrixXd::Identity(n_slack_, n_slack_);
