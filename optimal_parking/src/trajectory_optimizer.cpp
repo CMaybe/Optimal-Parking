@@ -60,6 +60,12 @@ void TrajectoryOptimizer::set_obstacles(const std::vector<Obstacle>& obstacles) 
 }
 
 void TrajectoryOptimizer::update_problem_dimensions() {
+    nx_ = state_dim_ * (prediction_horizon_ + 1);
+    nu_ = input_dim_ * prediction_horizon_;
+    total_vars_ = nx_ + nu_;
+    n_eq_ = state_dim_ * (prediction_horizon_ + 1) + state_dim_;
+    n_ineq_ = total_vars_;
+    n_slack_ = state_dim_;
     n_obstacle_constraints_ = (prediction_horizon_ + 1) * static_cast<Eigen::Index>(obstacles_.size());
     n_obstacle_slack_ = n_obstacle_constraints_;
     total_vars_all_slack_ = total_vars_ + n_slack_ + n_obstacle_slack_;
