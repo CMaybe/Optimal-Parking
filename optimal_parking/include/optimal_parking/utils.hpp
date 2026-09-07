@@ -1,6 +1,10 @@
 #ifndef UTILS_HPP
 #define UTILS_HPP
 
+#include <array>
+#include <limits>
+#include <utility>
+
 #include "optimal_parking/system/system_model.hpp"
 namespace optimal_parking {
 class Utils {
@@ -17,7 +21,7 @@ public:
 
         Eigen::Rotation2Dd rotation(yaw);
 
-        std::vector<Eigen::Vector2d> corners(4);
+        std::array<Eigen::Vector2d, 4> corners;
         corners[0] = Eigen::Vector2d(-half_length, -half_width);
         corners[1] = Eigen::Vector2d(half_length, -half_width);
         corners[2] = Eigen::Vector2d(half_length, half_width);
@@ -53,7 +57,11 @@ public:
         Eigen::Vector2d line_vec = p2 - p1;
         Eigen::Vector2d point_vec = point - p1;
 
-        double t = point_vec.dot(line_vec) / line_vec.squaredNorm();
+        const double line_length_squared = line_vec.squaredNorm();
+        if (line_length_squared <= std::numeric_limits<double>::epsilon()) {
+            return p1;
+        }
+        double t = point_vec.dot(line_vec) / line_length_squared;
 
         t = std::max(0.0, std::min(1.0, t));
         return p1 + t * line_vec;
