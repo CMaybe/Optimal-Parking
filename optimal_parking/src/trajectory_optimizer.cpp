@@ -111,9 +111,9 @@ void TrajectoryOptimizer::run_sqp(const SystemModel& system_model) {
         }
 
         const auto merit = [](const Eigen::VectorXd& step,
-                              const Eigen::MatrixXd& hessian_matrix,
+                              const Eigen::SparseMatrix<double>& hessian_matrix,
                               const Eigen::VectorXd& gradient_vector,
-                              const Eigen::MatrixXd& constraint_matrix,
+                              const Eigen::SparseMatrix<double>& constraint_matrix,
                               const Eigen::VectorXd& lower_bound,
                               const Eigen::VectorXd& upper_bound) {
             const Eigen::VectorXd constraint_values = constraint_matrix * step;
@@ -175,22 +175,34 @@ void TrajectoryOptimizer::update_trajectory_data() {
 QPData TrajectoryOptimizer::setup_qp(const SystemModel& system_model,
                                      const Eigen::Matrix<double, 5, 5>& q,
                                      const Eigen::Matrix<double, 2, 2>& r) {
-    Eigen::MatrixXd h = Eigen::MatrixXd::Zero(total_vars_all_slack_, total_vars_all_slack_);
+    std::vector<Eigen::Triplet<double>> hessian_triplets;
+    std::vector<Eigen::Triplet<double>> constraint_triplets;
+    const auto add_block = [](std::vector<Eigen::Triplet<double>>& triplets,
+                              Eigen::Index row_offset,
+                              Eigen::Index column_offset,
+                              const auto& block) {
+        for (Eigen::Index row = 0; row < block.rows(); ++row) {
+            for (Eigen::Index column = 0; column < block.cols(); ++column) {
+                if (block(row, column) != 0.0) {
+                    triplets.emplace_back(row_offset + row, column_offset + column, block(row, column));
+                }
+            }
+        }
+    };
+
     Eigen::VectorXd f = Eigen::VectorXd::Zero(total_vars_all_slack_);
 
-    Eigen::MatrixXd ceq = Eigen::MatrixXd::Zero(n_eq_, total_vars_all_slack_);
     Eigen::VectorXd beq = Eigen::VectorXd::Zero(n_eq_);
 
-    Eigen::MatrixXd cineq = Eigen::MatrixXd::Zero(n_ineq_, total_vars_all_slack_);
     Eigen::VectorXd bineq_lower = Eigen::VectorXd::Zero(n_ineq_);
     Eigen::VectorXd bineq_upper = Eigen::VectorXd::Zero(n_ineq_);
 
     // Hessian setup (cost function)
     for (int time_step = 0; time_step < prediction_horizon_; ++time_step) {
-        h.block(state_dim_ * time_step, state_dim_ * time_step, state_dim_, state_dim_) = q;
-        h.block(nx_ + input_dim_ * time_step, nx_ + input_dim_ * time_step, input_dim_, input_dim_) = r;
+        add_block(hessian_triplets, state_dim_ * time_step, state_dim_ * time_step, q);
+        add_block(hessian_triplets, nx_ + input_dim_ * time_step, nx_ + input_dim_ * time_step, r);
     }
-    h.block(nx_ - state_dim_, nx_ - state_dim_, state_dim_, state_dim_) = q;
+    add_block(hessian_triplets, nx_ - state_dim_, nx_ - state_dim_, q);
 
     for (int time_step = 0; time_step < prediction_horizon_; ++time_step) {
         f.segment(state_dim_ * time_step, state_dim_) = q * optimal_solution_.segment(state_dim_ * time_step, state_dim_);
@@ -200,9 +212,11 @@ QPData TrajectoryOptimizer::setup_qp(const SystemModel& system_model,
     f.segment(nx_ - state_dim_, state_dim_) = q * optimal_solution_.segment(nx_ - state_dim_, state_dim_);
 
     // Slack penalties
-    h.block(total_vars_, total_vars_, n_slack_, n_slack_) = rho_goal_ * Eigen::MatrixXd::Identity(n_slack_, n_slack_);
-    h.block(total_vars_ + n_slack_, total_vars_ + n_slack_, n_obstacle_slack_, n_obstacle_slack_) =
-        rho_obs_ * Eigen::MatrixXd::Identity(n_obstacle_slack_, n_obstacle_slack_);
+    add_block(hessian_triplets, total_vars_, total_vars_, rho_goal_ * Eigen::MatrixXd::Identity(n_slack_, n_slack_));
+    add_block(hessian_triplets,
+              total_vars_ + n_slack_,
+              total_vars_ + n_slack_,
+              rho_obs_ * Eigen::MatrixXd::Identity(n_obstacle_slack_, n_obstacle_slack_));
 
     // Equality constraints (dynamics and initial/goal)
     for (int time_step = 0; time_step < prediction_horizon_; ++time_step) {
@@ -212,34 +226,37 @@ QPData TrajectoryOptimizer::setup_qp(const SystemModel& system_model,
 
         auto [Ak, Bk, gk] = system_model.get_system_jacobian(xk, uk, ts_);
 
-        ceq.block(state_dim_ * (time_step + 1), state_dim_ * (time_step + 1), state_dim_, state_dim_) =
-            Eigen::MatrixXd::Identity(state_dim_, state_dim_);
-        ceq.block(state_dim_ * (time_step + 1), state_dim_ * time_step, state_dim_, state_dim_) = -Ak;
-        ceq.block(state_dim_ * (time_step + 1), nx_ + input_dim_ * time_step, state_dim_, input_dim_) = -Bk;
+        const Eigen::Index equality_row = state_dim_ * (time_step + 1);
+        add_block(constraint_triplets, equality_row, state_dim_ * (time_step + 1), Eigen::MatrixXd::Identity(state_dim_, state_dim_));
+        add_block(constraint_triplets, equality_row, state_dim_ * time_step, -Ak);
+        add_block(constraint_triplets, equality_row, nx_ + input_dim_ * time_step, -Bk);
         beq.segment(state_dim_ * (time_step + 1), state_dim_) = (Ak * xk() + Bk * uk() + gk) - xk_next();
     }
-    ceq.block(0, 0, state_dim_, state_dim_) = Eigen::MatrixXd::Identity(state_dim_, state_dim_);
-    ceq.block(n_eq_ - state_dim_, nx_ - state_dim_, state_dim_, state_dim_) = Eigen::MatrixXd::Identity(state_dim_, state_dim_);
-    ceq.block(n_eq_ - state_dim_, total_vars_, state_dim_, n_slack_) = Eigen::MatrixXd::Identity(state_dim_, state_dim_);
+    add_block(constraint_triplets, 0, 0, Eigen::MatrixXd::Identity(state_dim_, state_dim_));
+    add_block(constraint_triplets, n_eq_ - state_dim_, nx_ - state_dim_, Eigen::MatrixXd::Identity(state_dim_, state_dim_));
+    add_block(constraint_triplets, n_eq_ - state_dim_, total_vars_, Eigen::MatrixXd::Identity(state_dim_, state_dim_));
     beq.segment(n_eq_ - state_dim_, state_dim_) = x_goal_ - optimal_solution_.segment(nx_ - state_dim_, state_dim_);
 
     // Inequality constraints (state/input bounds)
     for (int time_step = 0; time_step <= prediction_horizon_; ++time_step) {
         SystemState xk(optimal_solution_.segment(state_dim_ * time_step, state_dim_));
-        cineq.block(state_dim_ * time_step, state_dim_ * time_step, state_dim_, state_dim_) =
-            Eigen::MatrixXd::Identity(state_dim_, state_dim_);
+        add_block(constraint_triplets,
+                  n_eq_ + state_dim_ * time_step,
+                  state_dim_ * time_step,
+                  Eigen::MatrixXd::Identity(state_dim_, state_dim_));
         bineq_lower.segment(state_dim_ * time_step, state_dim_) = state_lowerbound_ - xk();
         bineq_upper.segment(state_dim_ * time_step, state_dim_) = state_upperbound_ - xk();
         if (time_step < prediction_horizon_) {
             SystemInput uk(optimal_solution_.segment(nx_ + input_dim_ * time_step, input_dim_));
-            cineq.block(nx_ + input_dim_ * time_step, nx_ + input_dim_ * time_step, input_dim_, input_dim_) =
-                Eigen::MatrixXd::Identity(input_dim_, input_dim_);
+            add_block(constraint_triplets,
+                      n_eq_ + nx_ + input_dim_ * time_step,
+                      nx_ + input_dim_ * time_step,
+                      Eigen::MatrixXd::Identity(input_dim_, input_dim_));
             bineq_lower.segment(nx_ + input_dim_ * time_step, input_dim_) = input_lowerbound_ - uk();
             bineq_upper.segment(nx_ + input_dim_ * time_step, input_dim_) = input_upperbound_ - uk();
         }
     }
 
-    Eigen::MatrixXd cobs = Eigen::MatrixXd::Zero(n_obstacle_constraints_ + n_obstacle_slack_, total_vars_all_slack_);
     Eigen::VectorXd bobs_lower = Eigen::VectorXd::Zero(n_obstacle_constraints_ + n_obstacle_slack_);
     Eigen::VectorXd bobs_upper = Eigen::VectorXd::Zero(n_obstacle_constraints_ + n_obstacle_slack_);
 
@@ -261,10 +278,12 @@ QPData TrajectoryOptimizer::setup_qp(const SystemModel& system_model,
             double grad_x = dist > 1e-4 ? dx / dist : 0.0;
             double grad_y = dist > 1e-4 ? dy / dist : 0.0;
 
-            cobs(constraint_idx, state_dim_ * time_step) = grad_x;
-            cobs(constraint_idx, state_dim_ * time_step + 1) = grad_y;
-            cobs(constraint_idx, slack_idx) = 1.0;
-            cobs(n_obstacle_constraints_ + constraint_idx, slack_idx) = 1.0;
+            const Eigen::Index obstacle_row = n_eq_ + n_ineq_ + constraint_idx;
+            const Eigen::Index slack_row = obstacle_row + n_obstacle_constraints_;
+            constraint_triplets.emplace_back(obstacle_row, state_dim_ * time_step, grad_x);
+            constraint_triplets.emplace_back(obstacle_row, state_dim_ * time_step + 1, grad_y);
+            constraint_triplets.emplace_back(obstacle_row, slack_idx, 1.0);
+            constraint_triplets.emplace_back(slack_row, slack_idx, 1.0);
             bobs_lower(constraint_idx) = d_safe - dist;
             bobs_upper(constraint_idx) = std::numeric_limits<double>::infinity();
             bobs_lower(n_obstacle_constraints_ + constraint_idx) = 0.0;
@@ -275,14 +294,13 @@ QPData TrajectoryOptimizer::setup_qp(const SystemModel& system_model,
         }
     }
 
-    // Combine all constraints
-    Eigen::MatrixXd a = Eigen::MatrixXd::Zero(total_constraints_, total_vars_all_slack_);
+    Eigen::SparseMatrix<double> h(total_vars_all_slack_, total_vars_all_slack_);
+    h.setFromTriplets(hessian_triplets.begin(), hessian_triplets.end());
+
+    Eigen::SparseMatrix<double> a(total_constraints_, total_vars_all_slack_);
+    a.setFromTriplets(constraint_triplets.begin(), constraint_triplets.end());
     Eigen::VectorXd lower_bound(total_constraints_);
     Eigen::VectorXd upper_bound(total_constraints_);
-
-    a.block(0, 0, n_eq_, total_vars_all_slack_) = ceq;
-    a.block(n_eq_, 0, n_ineq_, total_vars_all_slack_) = cineq;
-    a.block(n_eq_ + n_ineq_, 0, n_obstacle_constraints_ + n_obstacle_slack_, total_vars_all_slack_) = cobs;
 
     lower_bound.head(n_eq_) = beq;
     upper_bound.head(n_eq_) = beq;

@@ -1,15 +1,16 @@
 #pragma once
 
 #include <Eigen/Dense>
+#include <Eigen/Sparse>
 #include <memory>
 #include <vector>
 
 namespace optimal_parking {
 
 struct QPData {
-    Eigen::MatrixXd H;
+    Eigen::SparseMatrix<double> H;
     Eigen::VectorXd f;
-    Eigen::MatrixXd A;
+    Eigen::SparseMatrix<double> A;
     Eigen::VectorXd lower_bound;
     Eigen::VectorXd upper_bound;
 };
