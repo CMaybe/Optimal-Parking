@@ -1,59 +1,46 @@
 #include "optimal_parking/trajectory_optimizer.hpp"
 
-#include <OsqpEigen/OsqpEigen.h>
 #include <algorithm>
 #include <cmath>
-#include <yaml-cpp/yaml.h>
+#include <iostream>
 
+#include "optimal_parking/config.hpp"
+#include "optimal_parking/qp_solver.hpp"
 #include "optimal_parking/rrt_star.hpp"
 #include "optimal_parking/utils.hpp"
 
 namespace optimal_parking {
 TrajectoryOptimizer::TrajectoryOptimizer(const std::string& config_path) {
-    YAML::Node config = YAML::LoadFile(config_path);
+    const PlannerConfig config = load_planner_config(config_path);
 
-    trajectory_time_ = config["trajectory_time"].as<double>();
-    ts_ = config["Ts"].as<double>();
-
-    state_lowerbound_ = Eigen::Map<Eigen::Vector<double, 5>>(config["state_lowerbound"].as<std::vector<double>>().data());
-    state_upperbound_ = Eigen::Map<Eigen::Vector<double, 5>>(config["state_upperbound"].as<std::vector<double>>().data());
-    input_lowerbound_ = Eigen::Map<Eigen::Vector<double, 2>>(config["input_lowerbound"].as<std::vector<double>>().data());
-    input_upperbound_ = Eigen::Map<Eigen::Vector<double, 2>>(config["input_upperbound"].as<std::vector<double>>().data());
-
-    n_sqp_ = config["n_sqp"].as<int>();
-    qp_iteration_ = config["qp_iteration"].as<int>();
-    rho_goal_ = config["rho_goal"].as<double>();
-    rho_obs_ = config["rho_obs"].as<double>();
-    safety_margin_ = config["safety_margin"].as<double>();
-
-    for (const auto& obs : config["obstacles"]) {
-        Obstacle obstacle;
-        obstacle.center = Eigen::Map<Eigen::Vector2d>(obs["center"].as<std::vector<double>>().data());
-        obstacle.length = obs["length"].as<double>();
-        obstacle.width = obs["width"].as<double>();
-        obstacle.yaw = obs["yaw"].as<double>();
-        obstacles_.push_back(obstacle);
-    }
+    trajectory_time_ = config.trajectory_time;
+    ts_ = config.ts;
+    state_lowerbound_ = config.state_lower_bound;
+    state_upperbound_ = config.state_upper_bound;
+    input_lowerbound_ = config.input_lower_bound;
+    input_upperbound_ = config.input_upper_bound;
+    n_sqp_ = config.sqp_iterations;
+    qp_iteration_ = config.qp_iterations;
+    rho_goal_ = config.goal_penalty;
+    rho_obs_ = config.obstacle_penalty;
+    safety_margin_ = config.safety_margin;
+    obstacles_ = config.obstacles;
 
     rrt_star_ = std::make_unique<RRTStar>(obstacles_,
-                                          config["map_x_min"].as<double>(),
-                                          config["map_x_max"].as<double>(),
-                                          config["map_y_min"].as<double>(),
-                                          config["map_y_max"].as<double>(),
-                                          config["goal_radius"].as<double>(),
-                                          config["goal_bias"].as<double>(),
-                                          config["step_dist"].as<double>(),
-                                          config["rewire_radius"].as<double>(),
-                                          config["max_iterations"].as<int>(),
-                                          config["vehicle_length"].as<double>(),
-                                          config["vehicle_width"].as<double>());
+                                          config.map_x_min,
+                                          config.map_x_max,
+                                          config.map_y_min,
+                                          config.map_y_max,
+                                          config.goal_radius,
+                                          config.goal_bias,
+                                          config.step_distance,
+                                          config.rewire_radius,
+                                          config.rrt_iterations,
+                                          config.vehicle_length,
+                                          config.vehicle_width);
 
-    Eigen::Vector<double, 5> state_weight =
-        Eigen::Map<Eigen::Vector<double, 5>>(config["state_weight"].as<std::vector<double>>().data());
-    Eigen::Vector<double, 2> input_weight =
-        Eigen::Map<Eigen::Vector<double, 2>>(config["input_weight"].as<std::vector<double>>().data());
-    q_ = state_weight.asDiagonal();
-    r_ = input_weight.asDiagonal();
+    q_ = config.state_weight.asDiagonal();
+    r_ = config.input_weight.asDiagonal();
 
     prediction_horizon_ = static_cast<Eigen::Index>(std::ceil(trajectory_time_ / ts_));
     state_dim_ = 5;
@@ -117,34 +104,18 @@ void TrajectoryOptimizer::run_sqp(const SystemModel& system_model) {
     for (int iter = 0; iter < n_sqp_; ++iter) {
         auto [hessian, gradient, linearMatrix, lowerBound, upperBound] = setup_qp(system_model, q_, r_);
 
-        Eigen::SparseMatrix<double> hessian_sparse = hessian.sparseView();
-        Eigen::SparseMatrix<double> linear_sparse = linearMatrix.sparseView();
-
-        std::unique_ptr<OsqpEigen::Solver> solver = std::make_unique<OsqpEigen::Solver>();
-
-        solver->settings()->setWarmStart(true);
-        solver->settings()->setVerbosity(false);
-        solver->settings()->setMaxIteration(qp_iteration_);
-        solver->settings()->setAbsoluteTolerance(1e-3);
-        solver->settings()->setRelativeTolerance(1e-3);
-        solver->data()->setNumberOfVariables(static_cast<int>(total_vars_all_slack_));
-        solver->data()->setNumberOfConstraints(static_cast<int>(total_constraints_));
-        solver->data()->setHessianMatrix(hessian_sparse);
-        solver->data()->setGradient(gradient);
-        solver->data()->setLinearConstraintsMatrix(linear_sparse);
-        solver->data()->setLowerBound(lowerBound);
-        solver->data()->setUpperBound(upperBound);
-        if (!solver->initSolver()) {
-            std::cerr << "QP initialization failed at iteration " << iter << std::endl;
-            return;
-        }
-
-        if (solver->solveProblem() != OsqpEigen::ErrorExitFlag::NoError) {
+        const auto solution = solve_qp({hessian, gradient, linearMatrix, lowerBound, upperBound},
+                                       {.max_iterations = qp_iteration_,
+                                        .absolute_tolerance = 1e-3,
+                                        .relative_tolerance = 1e-3,
+                                        .warm_start = true,
+                                        .verbose = false});
+        if (!solution) {
             std::cerr << "QP failed at iteration " << iter << std::endl;
             return;
         }
 
-        Eigen::VectorXd delta_solution = solver->getSolution();
+        const Eigen::VectorXd& delta_solution = *solution;
         const Eigen::VectorXd delta_variables = delta_solution.head(total_vars_);
         std::cout << "Iteration " << iter << ": delta_solution norm = " << delta_variables.norm() << std::endl;
 

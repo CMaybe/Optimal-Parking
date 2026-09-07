@@ -2,23 +2,22 @@
 
 #include <iostream>
 #include <unsupported/Eigen/MatrixFunctions>
-#include <yaml-cpp/yaml.h>
+
+#include "optimal_parking/config.hpp"
 namespace optimal_parking {
 SystemModel::SystemModel(const std::string& path) {
-    YAML::Node config = YAML::LoadFile(path);
-
-    vehicle_length_ = config["vehicle_length"].as<double>();
-    vehicle_width_ = config["vehicle_width"].as<double>();
+    const PlannerConfig config = load_planner_config(path);
+    vehicle_length_ = config.vehicle_length;
+    vehicle_width_ = config.vehicle_width;
 }
 SystemModel::SystemModel(double vehicle_length, double vehicle_width)
     : vehicle_length_(vehicle_length), vehicle_width_(vehicle_width) {}
 SystemModel::SystemModel(const SystemModel& other) = default;
 
 void SystemModel::initialize(const std::string& path) {
-    YAML::Node config = YAML::LoadFile(path);
-
-    vehicle_length_ = config["vehicle_length"].as<double>();
-    vehicle_width_ = config["vehicle_width"].as<double>();
+    const PlannerConfig config = load_planner_config(path);
+    vehicle_length_ = config.vehicle_length;
+    vehicle_width_ = config.vehicle_width;
 }
 void SystemModel::initialize(double vehicle_length, double vehicle_width) {
     vehicle_length_ = vehicle_length;

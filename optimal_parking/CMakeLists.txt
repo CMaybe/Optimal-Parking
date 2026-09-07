@@ -35,6 +35,8 @@ target_include_directories(
 )
 target_sources(
 	${PROJECT_NAME} PRIVATE
+		src/config.cpp
+		src/qp_solver.cpp
 		src/system/system_state.cpp
 		src/system/system_model.cpp
 		src/system/system_input.cpp
