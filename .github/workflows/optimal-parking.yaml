@@ -28,6 +28,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Ensure clang-tidy is available
+        run: |
+          command -v clang-tidy || (apt-get update && apt-get install -y --no-install-recommends clang-tidy)
+
       - name: Configure CMake
         run: |
           cmake \
