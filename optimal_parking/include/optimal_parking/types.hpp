@@ -8,17 +8,17 @@
 namespace optimal_parking {
 
 struct QPData {
-    Eigen::SparseMatrix<double> H;
-    Eigen::VectorXd f;
-    Eigen::SparseMatrix<double> A;
+    Eigen::SparseMatrix<double> hessian;
+    Eigen::VectorXd gradient;
+    Eigen::SparseMatrix<double> constraint_matrix;
     Eigen::VectorXd lower_bound;
     Eigen::VectorXd upper_bound;
 };
 
 struct ModelMatrices {
-    Eigen::Matrix<double, 5, 5> Ad;
-    Eigen::Matrix<double, 5, 2> Bd;
-    Eigen::Matrix<double, 5, 1> gd;
+    Eigen::Matrix<double, 5, 5> discrete_a;
+    Eigen::Matrix<double, 5, 2> discrete_b;
+    Eigen::Matrix<double, 5, 1> discrete_g;
 };
 
 struct TrajectoryData {

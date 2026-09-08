@@ -21,16 +21,16 @@ public:
     [[nodiscard]] inline double velocity() const { return velocity_; }
     [[nodiscard]] inline double delta() const { return delta_; }
 
-    inline const Eigen::Vector<double, 5>& operator()() const { return system_state_; };
-    inline double operator()(const int& idx) const { return system_state_[idx]; };
-    inline double operator[](const int& idx) const { return system_state_[idx]; };
+    inline const Eigen::Vector<double, 5>& operator()() const { return state_vector_; };
+    inline double operator()(const int& idx) const { return state_vector_[idx]; };
+    inline double operator[](const int& idx) const { return state_vector_[idx]; };
 
     friend Eigen::Vector<double, 5> operator*(const Eigen::Matrix<double, 5, 5>& lhs, const SystemState& rhs) {
-        return lhs * rhs.system_state_;
+        return lhs * rhs.state_vector_;
     }
 
 private:
-    Eigen::Vector<double, 5> system_state_;
+    Eigen::Vector<double, 5> state_vector_;
     double x_;
     double y_;
     double yaw_;

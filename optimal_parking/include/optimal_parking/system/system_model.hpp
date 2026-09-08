@@ -17,8 +17,10 @@ public:
     void initialize(const std::string& path);
     void initialize(double vehicle_length, double vehicle_width);
 
-    [[nodiscard]] Eigen::Vector<double, 5> f(const SystemState& state, const SystemInput& input) const;
-    [[nodiscard]] ModelMatrices get_system_jacobian(const SystemState& state, const SystemInput& input, const double& dt) const;
+    [[nodiscard]] Eigen::Vector<double, 5> evaluate_dynamics(const SystemState& state, const SystemInput& input) const;
+    [[nodiscard]] ModelMatrices compute_discrete_linearization(const SystemState& state,
+                                                               const SystemInput& input,
+                                                               double time_step) const;
     [[nodiscard]] inline double vehicle_length() const { return vehicle_length_; };
     [[nodiscard]] inline double vehicle_width() const { return vehicle_width_; };
 

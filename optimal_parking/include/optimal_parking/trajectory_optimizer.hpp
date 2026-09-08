@@ -20,7 +20,9 @@ public:
     void set_obstacles(const std::vector<Obstacle>& obstacles);
     void run_sqp(const SystemModel& system_model);
     void update_trajectory_data();
-    QPData setup_qp(const SystemModel& system_model, const Eigen::Matrix<double, 5, 5>& q, const Eigen::Matrix<double, 2, 2>& r);
+    QPData setup_qp(const SystemModel& system_model,
+                    const Eigen::Matrix<double, 5, 5>& state_weight_matrix,
+                    const Eigen::Matrix<double, 2, 2>& input_weight_matrix);
 
     [[nodiscard]] TrajectoryData get_trajectory_data() const {
         return {path_x_, path_y_, path_yaw_, velocity_, steering_angle_, acceleration_, steering_rate_};
@@ -34,36 +36,36 @@ private:
     void update_problem_dimensions();
 
     double trajectory_time_;
-    double ts_;
-    int n_sqp_;
-    int qp_iteration_;
-    double rho_goal_, rho_obs_;
-    Eigen::Vector<double, 5> state_lowerbound_, state_upperbound_;
-    Eigen::Vector<double, 2> input_lowerbound_, input_upperbound_;
+    double sample_time_;
+    int max_sqp_iterations_;
+    int max_qp_iterations_;
+    double goal_penalty_weight_, obstacle_penalty_weight_;
+    Eigen::Vector<double, 5> state_lower_bound_, state_upper_bound_;
+    Eigen::Vector<double, 2> input_lower_bound_, input_upper_bound_;
     std::vector<Obstacle> obstacles_;
     double safety_margin_;
 
     Eigen::VectorXd optimal_solution_;
 
-    Eigen::Vector<double, 5> x0_;
-    Eigen::Vector<double, 5> x_goal_;
-    Eigen::Matrix<double, 5, 5> q_;
-    Eigen::Matrix<double, 2, 2> r_;
+    Eigen::Vector<double, 5> initial_state_;
+    Eigen::Vector<double, 5> goal_state_;
+    Eigen::Matrix<double, 5, 5> state_weight_matrix_;
+    Eigen::Matrix<double, 2, 2> input_weight_matrix_;
 
     Eigen::Index prediction_horizon_;
 
     Eigen::Index state_dim_;
     Eigen::Index input_dim_;
 
-    Eigen::Index nx_, nu_, total_vars_;
-    Eigen::Index n_eq_;
-    Eigen::Index n_ineq_;
+    Eigen::Index num_state_variables_, num_input_variables_, num_decision_variables_;
+    Eigen::Index num_equality_constraints_;
+    Eigen::Index num_inequality_constraints_;
 
-    Eigen::Index n_slack_;
-    Eigen::Index n_obstacle_constraints_;
-    Eigen::Index n_obstacle_slack_;
-    Eigen::Index total_vars_all_slack_;
-    Eigen::Index total_constraints_;
+    Eigen::Index num_slack_variables_;
+    Eigen::Index num_obstacle_constraints_;
+    Eigen::Index num_obstacle_slack_variables_;
+    Eigen::Index num_total_variables_with_slack_;
+    Eigen::Index num_total_constraints_;
 
     double vehicle_radius_;
 

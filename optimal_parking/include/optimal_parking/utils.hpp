@@ -9,15 +9,15 @@
 namespace optimal_parking {
 class Utils {
 public:
-    inline static std::pair<double, double> find_closest_point_on_obstacle(const double& xk,
-                                                                           const double& yk,
-                                                                           const Obstacle& obs) {
-        Eigen::Vector2d vehicle_pos(xk, yk);
+    inline static std::pair<double, double> find_closest_point_on_obstacle(const double& x,
+                                                                           const double& y,
+                                                                           const Obstacle& obstacle) {
+        Eigen::Vector2d vehicle_pos(x, y);
 
-        Eigen::Vector2d obs_center = obs.center;
-        double half_length = obs.length / 2.0;
-        double half_width = obs.width / 2.0;
-        double yaw = obs.yaw;
+        Eigen::Vector2d obs_center = obstacle.center;
+        double half_length = obstacle.length / 2.0;
+        double half_width = obstacle.width / 2.0;
+        double yaw = obstacle.yaw;
 
         Eigen::Rotation2Dd rotation(yaw);
 
@@ -67,24 +67,24 @@ public:
         return p1 + t * line_vec;
     }
 
-    inline static Eigen::Vector<double, 5> r_k4(const SystemModel& model,
-                                                const Eigen::Vector<double, 5>& x,
-                                                const Eigen::Vector<double, 2>& u,
-                                                const double& ts) {
-        Eigen::Vector<double, 5> k1 = model.f(SystemState(x), SystemInput(u));
-        Eigen::Vector<double, 5> k2 = model.f(SystemState(x + ts / 2 * k1), SystemInput(u));
-        Eigen::Vector<double, 5> k3 = model.f(SystemState(x + ts / 2 * k2), SystemInput(u));
-        Eigen::Vector<double, 5> k4 = model.f(SystemState(x + ts * k3), SystemInput(u));
+    inline static Eigen::Vector<double, 5> rk4(const SystemModel& model,
+                                               const Eigen::Vector<double, 5>& state,
+                                               const Eigen::Vector<double, 2>& input,
+                                               const double& time_step) {
+        Eigen::Vector<double, 5> k1 = model.evaluate_dynamics(SystemState(state), SystemInput(input));
+        Eigen::Vector<double, 5> k2 = model.evaluate_dynamics(SystemState(state + time_step / 2 * k1), SystemInput(input));
+        Eigen::Vector<double, 5> k3 = model.evaluate_dynamics(SystemState(state + time_step / 2 * k2), SystemInput(input));
+        Eigen::Vector<double, 5> k4 = model.evaluate_dynamics(SystemState(state + time_step * k3), SystemInput(input));
 
-        return x + ts * (k1 / 6 + k2 / 3 + k3 / 3 + k4 / 6);
+        return state + time_step * (k1 / 6 + k2 / 3 + k3 / 3 + k4 / 6);
     }
 
-    inline static Eigen::Vector<double, 5> ef(const SystemModel& model,
-                                              const Eigen::Vector<double, 5>& x,
-                                              const Eigen::Vector<double, 2>& u,
-                                              const double& ts) {
-        Eigen::Vector<double, 5> f = model.f(SystemState(x), SystemInput(u));
-        return x + ts * f;
+    inline static Eigen::Vector<double, 5> euler_forward(const SystemModel& model,
+                                                         const Eigen::Vector<double, 5>& state,
+                                                         const Eigen::Vector<double, 2>& input,
+                                                         const double& time_step) {
+        Eigen::Vector<double, 5> state_dot = model.evaluate_dynamics(SystemState(state), SystemInput(input));
+        return state + time_step * state_dot;
     }
 };
 }  // namespace optimal_parking

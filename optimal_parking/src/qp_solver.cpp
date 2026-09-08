@@ -12,14 +12,14 @@ std::optional<Eigen::VectorXd> solve_qp(const QPData& problem, const QPSolverSet
     solver.settings()->setAbsoluteTolerance(settings.absolute_tolerance);
     solver.settings()->setRelativeTolerance(settings.relative_tolerance);
 
-    Eigen::VectorXd gradient = problem.f;
+    Eigen::VectorXd gradient = problem.gradient;
     Eigen::VectorXd lower_bound = problem.lower_bound;
     Eigen::VectorXd upper_bound = problem.upper_bound;
-    solver.data()->setNumberOfVariables(static_cast<int>(problem.H.rows()));
-    solver.data()->setNumberOfConstraints(static_cast<int>(problem.A.rows()));
-    solver.data()->setHessianMatrix(problem.H);
+    solver.data()->setNumberOfVariables(static_cast<int>(problem.hessian.rows()));
+    solver.data()->setNumberOfConstraints(static_cast<int>(problem.constraint_matrix.rows()));
+    solver.data()->setHessianMatrix(problem.hessian);
     solver.data()->setGradient(gradient);
-    solver.data()->setLinearConstraintsMatrix(problem.A);
+    solver.data()->setLinearConstraintsMatrix(problem.constraint_matrix);
     solver.data()->setLowerBound(lower_bound);
     solver.data()->setUpperBound(upper_bound);
 

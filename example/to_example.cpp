@@ -182,7 +182,7 @@ int main() {
         plot_vehicle(vehicle_length, vehicle_width, goal_pose(0), goal_pose(1), goal_pose(2), goal_pose(4), "r-");
         plot_vehicle(vehicle_length, vehicle_width, initial_pose(0), initial_pose(1), initial_pose(2), initial_pose(4), "g-");
         Eigen::Vector2d input(traj_acc[i], traj_steering_rate[i]);
-        current_state = Utils::r_k4(system, current_state, input, Ts);
+        current_state = Utils::rk4(system, current_state, input, Ts);
         plt::axis("equal");
         plt::xlim(-20, 20);
         plt::ylim(-20, 20);

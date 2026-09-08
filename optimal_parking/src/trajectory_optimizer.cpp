@@ -14,15 +14,15 @@ TrajectoryOptimizer::TrajectoryOptimizer(const std::string& config_path) {
     const PlannerConfig config = load_planner_config(config_path);
 
     trajectory_time_ = config.trajectory_time;
-    ts_ = config.ts;
-    state_lowerbound_ = config.state_lower_bound;
-    state_upperbound_ = config.state_upper_bound;
-    input_lowerbound_ = config.input_lower_bound;
-    input_upperbound_ = config.input_upper_bound;
-    n_sqp_ = config.sqp_iterations;
-    qp_iteration_ = config.qp_iterations;
-    rho_goal_ = config.goal_penalty;
-    rho_obs_ = config.obstacle_penalty;
+    sample_time_ = config.ts;
+    state_lower_bound_ = config.state_lower_bound;
+    state_upper_bound_ = config.state_upper_bound;
+    input_lower_bound_ = config.input_lower_bound;
+    input_upper_bound_ = config.input_upper_bound;
+    max_sqp_iterations_ = config.sqp_iterations;
+    max_qp_iterations_ = config.qp_iterations;
+    goal_penalty_weight_ = config.goal_penalty;
+    obstacle_penalty_weight_ = config.obstacle_penalty;
     safety_margin_ = config.safety_margin;
     obstacles_ = config.obstacles;
 
@@ -39,18 +39,18 @@ TrajectoryOptimizer::TrajectoryOptimizer(const std::string& config_path) {
                                           config.vehicle_length,
                                           config.vehicle_width);
 
-    q_ = config.state_weight.asDiagonal();
-    r_ = config.input_weight.asDiagonal();
+    state_weight_matrix_ = config.state_weight.asDiagonal();
+    input_weight_matrix_ = config.input_weight.asDiagonal();
 
-    prediction_horizon_ = static_cast<Eigen::Index>(std::ceil(trajectory_time_ / ts_));
+    prediction_horizon_ = static_cast<Eigen::Index>(std::ceil(trajectory_time_ / sample_time_));
     state_dim_ = 5;
     input_dim_ = 2;
 
     update_problem_dimensions();
 
-    x_goal_.setZero();
-    x0_.setZero();
-    optimal_solution_.setZero(total_vars_);
+    goal_state_.setZero();
+    initial_state_.setZero();
+    optimal_solution_.setZero(num_decision_variables_);
 }
 
 void TrajectoryOptimizer::set_obstacles(const std::vector<Obstacle>& obstacles) {
@@ -60,30 +60,31 @@ void TrajectoryOptimizer::set_obstacles(const std::vector<Obstacle>& obstacles) 
 }
 
 void TrajectoryOptimizer::update_problem_dimensions() {
-    nx_ = state_dim_ * (prediction_horizon_ + 1);
-    nu_ = input_dim_ * prediction_horizon_;
-    total_vars_ = nx_ + nu_;
-    n_eq_ = state_dim_ * (prediction_horizon_ + 1) + state_dim_;
-    n_ineq_ = total_vars_;
-    n_slack_ = state_dim_;
-    n_obstacle_constraints_ = (prediction_horizon_ + 1) * static_cast<Eigen::Index>(obstacles_.size());
-    n_obstacle_slack_ = n_obstacle_constraints_;
-    total_vars_all_slack_ = total_vars_ + n_slack_ + n_obstacle_slack_;
-    total_constraints_ = n_eq_ + n_ineq_ + n_obstacle_constraints_ + n_obstacle_slack_;
+    num_state_variables_ = state_dim_ * (prediction_horizon_ + 1);
+    num_input_variables_ = input_dim_ * prediction_horizon_;
+    num_decision_variables_ = num_state_variables_ + num_input_variables_;
+    num_equality_constraints_ = state_dim_ * (prediction_horizon_ + 1) + state_dim_;
+    num_inequality_constraints_ = num_decision_variables_;
+    num_slack_variables_ = state_dim_;
+    num_obstacle_constraints_ = (prediction_horizon_ + 1) * static_cast<Eigen::Index>(obstacles_.size());
+    num_obstacle_slack_variables_ = num_obstacle_constraints_;
+    num_total_variables_with_slack_ = num_decision_variables_ + num_slack_variables_ + num_obstacle_slack_variables_;
+    num_total_constraints_ =
+        num_equality_constraints_ + num_inequality_constraints_ + num_obstacle_constraints_ + num_obstacle_slack_variables_;
 }
 
-void TrajectoryOptimizer::set_goal_pose(const Eigen::Vector<double, 5>& goal_pose) { x_goal_ = goal_pose; }
-void TrajectoryOptimizer::set_initial_pose(const Eigen::Vector<double, 5>& initial_pose) { x0_ = initial_pose; }
+void TrajectoryOptimizer::set_goal_pose(const Eigen::Vector<double, 5>& goal_pose) { goal_state_ = goal_pose; }
+void TrajectoryOptimizer::set_initial_pose(const Eigen::Vector<double, 5>& initial_pose) { initial_state_ = initial_pose; }
 
 void TrajectoryOptimizer::run_sqp(const SystemModel& system_model) {
-    optimal_solution_.setZero(total_vars_);
+    optimal_solution_.setZero(num_decision_variables_);
     vehicle_radius_ = 0.5 * std::hypot(system_model.vehicle_length(), system_model.vehicle_width());
 
-    Eigen::Vector3d start(x0_(0), x0_(1), x0_(2));
-    Eigen::Vector3d goal(x_goal_(0), x_goal_(1), x_goal_(2));
+    Eigen::Vector3d start(initial_state_(0), initial_state_(1), initial_state_(2));
+    Eigen::Vector3d goal(goal_state_(0), goal_state_(1), goal_state_(2));
     std::vector<Eigen::Vector3d> path = rrt_star_->make_path(start, goal, prediction_horizon_ + 1);
     if (path.size() == static_cast<std::size_t>(prediction_horizon_ + 1)) {
-        optimal_solution_.segment(0, state_dim_) = x0_;
+        optimal_solution_.segment(0, state_dim_) = initial_state_;
         for (int i = 0; i <= prediction_horizon_; ++i) {
             optimal_solution_(state_dim_ * i) = path[i](0);
             optimal_solution_(state_dim_ * i + 1) = path[i](1);
@@ -93,11 +94,12 @@ void TrajectoryOptimizer::run_sqp(const SystemModel& system_model) {
         std::cerr << "RRT* path planning failed to produce the requested horizon." << std::endl;
         return;
     }
-    for (int iter = 0; iter < n_sqp_; ++iter) {
-        auto [hessian, gradient, linearMatrix, lowerBound, upperBound] = setup_qp(system_model, q_, r_);
+    for (int iter = 0; iter < max_sqp_iterations_; ++iter) {
+        auto [hessian, gradient, linear_matrix, lower_bound, upper_bound] =
+            setup_qp(system_model, state_weight_matrix_, input_weight_matrix_);
 
-        const auto solution = solve_qp({hessian, gradient, linearMatrix, lowerBound, upperBound},
-                                       {.max_iterations = qp_iteration_,
+        const auto solution = solve_qp({hessian, gradient, linear_matrix, lower_bound, upper_bound},
+                                       {.max_iterations = max_qp_iterations_,
                                         .absolute_tolerance = 1e-3,
                                         .relative_tolerance = 1e-3,
                                         .warm_start = true,
@@ -108,8 +110,8 @@ void TrajectoryOptimizer::run_sqp(const SystemModel& system_model) {
         }
 
         const Eigen::VectorXd& delta_solution = *solution;
-        const Eigen::VectorXd delta_variables = delta_solution.head(total_vars_);
-        const double mean_delta = delta_variables.norm() / std::sqrt(static_cast<double>(total_vars_));
+        const Eigen::VectorXd delta_variables = delta_solution.head(num_decision_variables_);
+        const double mean_delta = delta_variables.norm() / std::sqrt(static_cast<double>(num_decision_variables_));
         const double max_delta = delta_variables.lpNorm<Eigen::Infinity>();
         std::cout << "Iteration " << iter << ": max_delta = " << max_delta << ", mean_delta = " << mean_delta << std::endl;
 
@@ -118,7 +120,7 @@ void TrajectoryOptimizer::run_sqp(const SystemModel& system_model) {
             break;
         }
 
-        const Eigen::VectorXd a_delta = linearMatrix * delta_solution;
+        const Eigen::VectorXd a_delta = linear_matrix * delta_solution;
         const Eigen::VectorXd h_delta = hessian * delta_solution;
         const double quad_coeff = 0.5 * delta_solution.dot(h_delta);
         const double lin_coeff = gradient.dot(delta_solution);
@@ -138,9 +140,10 @@ void TrajectoryOptimizer::run_sqp(const SystemModel& system_model) {
             return s * s * quad + s * lin + 1e4 * violation;
         };
 
-        const double current_merit = merit(0.0, quad_coeff, lin_coeff, a_delta, lowerBound, upperBound);
+        const double current_merit = merit(0.0, quad_coeff, lin_coeff, a_delta, lower_bound, upper_bound);
         double step_length = 1.0;
-        while (step_length > 1e-3 && merit(step_length, quad_coeff, lin_coeff, a_delta, lowerBound, upperBound) > current_merit) {
+        while (step_length > 1e-3 &&
+               merit(step_length, quad_coeff, lin_coeff, a_delta, lower_bound, upper_bound) > current_merit) {
             step_length *= 0.5;
         }
         optimal_solution_ += step_length * delta_variables;
@@ -168,19 +171,20 @@ void TrajectoryOptimizer::update_trajectory_data() {
         steering_angle_[i] = optimal_solution_(state_dim_ * i + 4);
 
         if (i < prediction_horizon_) {
-            acceleration_[i] = optimal_solution_(nx_ + input_dim_ * i);
-            steering_rate_[i] = optimal_solution_(nx_ + input_dim_ * i + 1);
+            acceleration_[i] = optimal_solution_(num_state_variables_ + input_dim_ * i);
+            steering_rate_[i] = optimal_solution_(num_state_variables_ + input_dim_ * i + 1);
         }
     }
 }
 
 QPData TrajectoryOptimizer::setup_qp(const SystemModel& system_model,
-                                     const Eigen::Matrix<double, 5, 5>& q,
-                                     const Eigen::Matrix<double, 2, 2>& r) {
+                                     const Eigen::Matrix<double, 5, 5>& state_weight_matrix,
+                                     const Eigen::Matrix<double, 2, 2>& input_weight_matrix) {
     std::vector<Eigen::Triplet<double>> hessian_triplets;
     std::vector<Eigen::Triplet<double>> constraint_triplets;
-    hessian_triplets.reserve(static_cast<std::size_t>(total_vars_all_slack_));
-    constraint_triplets.reserve(static_cast<std::size_t>(n_eq_ * 4 + n_ineq_ + n_obstacle_constraints_ * 4));
+    hessian_triplets.reserve(static_cast<std::size_t>(num_total_variables_with_slack_));
+    constraint_triplets.reserve(
+        static_cast<std::size_t>(num_equality_constraints_ * 4 + num_inequality_constraints_ + num_obstacle_constraints_ * 4));
 
     const auto add_block = [](std::vector<Eigen::Triplet<double>>& triplets,
                               Eigen::Index row_offset,
@@ -195,127 +199,148 @@ QPData TrajectoryOptimizer::setup_qp(const SystemModel& system_model,
         }
     };
 
-    Eigen::VectorXd f = Eigen::VectorXd::Zero(total_vars_all_slack_);
+    Eigen::VectorXd gradient = Eigen::VectorXd::Zero(num_total_variables_with_slack_);
 
-    Eigen::VectorXd beq = Eigen::VectorXd::Zero(n_eq_);
+    Eigen::VectorXd equality_vector = Eigen::VectorXd::Zero(num_equality_constraints_);
 
-    Eigen::VectorXd bineq_lower = Eigen::VectorXd::Zero(n_ineq_);
-    Eigen::VectorXd bineq_upper = Eigen::VectorXd::Zero(n_ineq_);
+    Eigen::VectorXd inequality_lower_bound = Eigen::VectorXd::Zero(num_inequality_constraints_);
+    Eigen::VectorXd inequality_upper_bound = Eigen::VectorXd::Zero(num_inequality_constraints_);
 
     // Hessian setup (cost function)
     for (int time_step = 0; time_step < prediction_horizon_; ++time_step) {
-        add_block(hessian_triplets, state_dim_ * time_step, state_dim_ * time_step, q);
-        add_block(hessian_triplets, nx_ + input_dim_ * time_step, nx_ + input_dim_ * time_step, r);
+        add_block(hessian_triplets, state_dim_ * time_step, state_dim_ * time_step, state_weight_matrix);
+        add_block(hessian_triplets,
+                  num_state_variables_ + input_dim_ * time_step,
+                  num_state_variables_ + input_dim_ * time_step,
+                  input_weight_matrix);
     }
-    add_block(hessian_triplets, nx_ - state_dim_, nx_ - state_dim_, q);
+    add_block(hessian_triplets, num_state_variables_ - state_dim_, num_state_variables_ - state_dim_, state_weight_matrix);
 
     for (int time_step = 0; time_step < prediction_horizon_; ++time_step) {
-        f.segment(state_dim_ * time_step, state_dim_) = q * optimal_solution_.segment(state_dim_ * time_step, state_dim_);
-        f.segment(nx_ + input_dim_ * time_step, input_dim_) =
-            r * optimal_solution_.segment(nx_ + input_dim_ * time_step, input_dim_);
+        gradient.segment(state_dim_ * time_step, state_dim_) =
+            state_weight_matrix * optimal_solution_.segment(state_dim_ * time_step, state_dim_);
+        gradient.segment(num_state_variables_ + input_dim_ * time_step, input_dim_) =
+            input_weight_matrix * optimal_solution_.segment(num_state_variables_ + input_dim_ * time_step, input_dim_);
     }
-    f.segment(nx_ - state_dim_, state_dim_) = q * optimal_solution_.segment(nx_ - state_dim_, state_dim_);
+    gradient.segment(num_state_variables_ - state_dim_, state_dim_) =
+        state_weight_matrix * optimal_solution_.segment(num_state_variables_ - state_dim_, state_dim_);
 
     // Slack penalties
-    add_block(hessian_triplets, total_vars_, total_vars_, rho_goal_ * Eigen::MatrixXd::Identity(n_slack_, n_slack_));
     add_block(hessian_triplets,
-              total_vars_ + n_slack_,
-              total_vars_ + n_slack_,
-              rho_obs_ * Eigen::MatrixXd::Identity(n_obstacle_slack_, n_obstacle_slack_));
+              num_decision_variables_,
+              num_decision_variables_,
+              goal_penalty_weight_ * Eigen::MatrixXd::Identity(num_slack_variables_, num_slack_variables_));
+    add_block(hessian_triplets,
+              num_decision_variables_ + num_slack_variables_,
+              num_decision_variables_ + num_slack_variables_,
+              obstacle_penalty_weight_ * Eigen::MatrixXd::Identity(num_obstacle_slack_variables_, num_obstacle_slack_variables_));
 
     // Equality constraints (dynamics and initial/goal)
     for (int time_step = 0; time_step < prediction_horizon_; ++time_step) {
-        SystemState xk(optimal_solution_.segment(state_dim_ * time_step, state_dim_));
-        SystemState xk_next(optimal_solution_.segment(state_dim_ * (time_step + 1), state_dim_));
-        SystemInput uk(optimal_solution_.segment(nx_ + input_dim_ * time_step, input_dim_));
+        SystemState current_state(optimal_solution_.segment(state_dim_ * time_step, state_dim_));
+        SystemState next_state(optimal_solution_.segment(state_dim_ * (time_step + 1), state_dim_));
+        SystemInput current_input(optimal_solution_.segment(num_state_variables_ + input_dim_ * time_step, input_dim_));
 
-        auto [Ak, Bk, gk] = system_model.get_system_jacobian(xk, uk, ts_);
+        auto [discrete_a, discrete_b, discrete_g] =
+            system_model.compute_discrete_linearization(current_state, current_input, sample_time_);
 
         const Eigen::Index equality_row = state_dim_ * (time_step + 1);
         add_block(
             constraint_triplets, equality_row, state_dim_ * (time_step + 1), Eigen::MatrixXd::Identity(state_dim_, state_dim_));
-        add_block(constraint_triplets, equality_row, state_dim_ * time_step, -Ak);
-        add_block(constraint_triplets, equality_row, nx_ + input_dim_ * time_step, -Bk);
-        beq.segment(state_dim_ * (time_step + 1), state_dim_) = (Ak * xk() + Bk * uk() + gk) - xk_next();
+        add_block(constraint_triplets, equality_row, state_dim_ * time_step, -discrete_a);
+        add_block(constraint_triplets, equality_row, num_state_variables_ + input_dim_ * time_step, -discrete_b);
+        equality_vector.segment(state_dim_ * (time_step + 1), state_dim_) =
+            (discrete_a * current_state() + discrete_b * current_input() + discrete_g) - next_state();
     }
     add_block(constraint_triplets, 0, 0, Eigen::MatrixXd::Identity(state_dim_, state_dim_));
-    add_block(constraint_triplets, n_eq_ - state_dim_, nx_ - state_dim_, Eigen::MatrixXd::Identity(state_dim_, state_dim_));
-    add_block(constraint_triplets, n_eq_ - state_dim_, total_vars_, Eigen::MatrixXd::Identity(state_dim_, state_dim_));
-    beq.segment(n_eq_ - state_dim_, state_dim_) = x_goal_ - optimal_solution_.segment(nx_ - state_dim_, state_dim_);
+    add_block(constraint_triplets,
+              num_equality_constraints_ - state_dim_,
+              num_state_variables_ - state_dim_,
+              Eigen::MatrixXd::Identity(state_dim_, state_dim_));
+    add_block(constraint_triplets,
+              num_equality_constraints_ - state_dim_,
+              num_decision_variables_,
+              Eigen::MatrixXd::Identity(state_dim_, state_dim_));
+    equality_vector.segment(num_equality_constraints_ - state_dim_, state_dim_) =
+        goal_state_ - optimal_solution_.segment(num_state_variables_ - state_dim_, state_dim_);
 
     // Inequality constraints (state/input bounds)
     for (int time_step = 0; time_step <= prediction_horizon_; ++time_step) {
-        SystemState xk(optimal_solution_.segment(state_dim_ * time_step, state_dim_));
+        SystemState current_state(optimal_solution_.segment(state_dim_ * time_step, state_dim_));
         add_block(constraint_triplets,
-                  n_eq_ + state_dim_ * time_step,
+                  num_equality_constraints_ + state_dim_ * time_step,
                   state_dim_ * time_step,
                   Eigen::MatrixXd::Identity(state_dim_, state_dim_));
-        bineq_lower.segment(state_dim_ * time_step, state_dim_) = state_lowerbound_ - xk();
-        bineq_upper.segment(state_dim_ * time_step, state_dim_) = state_upperbound_ - xk();
+        inequality_lower_bound.segment(state_dim_ * time_step, state_dim_) = state_lower_bound_ - current_state();
+        inequality_upper_bound.segment(state_dim_ * time_step, state_dim_) = state_upper_bound_ - current_state();
         if (time_step < prediction_horizon_) {
-            SystemInput uk(optimal_solution_.segment(nx_ + input_dim_ * time_step, input_dim_));
+            SystemInput current_input(optimal_solution_.segment(num_state_variables_ + input_dim_ * time_step, input_dim_));
             add_block(constraint_triplets,
-                      n_eq_ + nx_ + input_dim_ * time_step,
-                      nx_ + input_dim_ * time_step,
+                      num_equality_constraints_ + num_state_variables_ + input_dim_ * time_step,
+                      num_state_variables_ + input_dim_ * time_step,
                       Eigen::MatrixXd::Identity(input_dim_, input_dim_));
-            bineq_lower.segment(nx_ + input_dim_ * time_step, input_dim_) = input_lowerbound_ - uk();
-            bineq_upper.segment(nx_ + input_dim_ * time_step, input_dim_) = input_upperbound_ - uk();
+            inequality_lower_bound.segment(num_state_variables_ + input_dim_ * time_step, input_dim_) =
+                input_lower_bound_ - current_input();
+            inequality_upper_bound.segment(num_state_variables_ + input_dim_ * time_step, input_dim_) =
+                input_upper_bound_ - current_input();
         }
     }
 
-    Eigen::VectorXd bobs_lower = Eigen::VectorXd::Zero(n_obstacle_constraints_ + n_obstacle_slack_);
-    Eigen::VectorXd bobs_upper = Eigen::VectorXd::Zero(n_obstacle_constraints_ + n_obstacle_slack_);
+    Eigen::VectorXd obstacle_lower_bound = Eigen::VectorXd::Zero(num_obstacle_constraints_ + num_obstacle_slack_variables_);
+    Eigen::VectorXd obstacle_upper_bound = Eigen::VectorXd::Zero(num_obstacle_constraints_ + num_obstacle_slack_variables_);
 
     Eigen::Index constraint_idx = 0;
-    Eigen::Index slack_idx = total_vars_ + n_slack_;
+    Eigen::Index slack_idx = num_decision_variables_ + num_slack_variables_;
 
     for (int time_step = 0; time_step <= prediction_horizon_; ++time_step) {
-        double x_k = optimal_solution_(state_dim_ * time_step);
-        double y_k = optimal_solution_(state_dim_ * time_step + 1);
+        double current_x = optimal_solution_(state_dim_ * time_step);
+        double current_y = optimal_solution_(state_dim_ * time_step + 1);
 
-        for (const Obstacle& obs : obstacles_) {
-            auto [c_x, c_y] = Utils::find_closest_point_on_obstacle(x_k, y_k, obs);
-            double d_safe = vehicle_radius_ + safety_margin_;
+        for (const Obstacle& obstacle : obstacles_) {
+            auto [closest_x, closest_y] = Utils::find_closest_point_on_obstacle(current_x, current_y, obstacle);
+            double safety_distance = vehicle_radius_ + safety_margin_;
 
-            double dx = x_k - c_x;
-            double dy = y_k - c_y;
+            double dx = current_x - closest_x;
+            double dy = current_y - closest_y;
             double dist = std::sqrt(dx * dx + dy * dy);
 
             double grad_x = dist > 1e-4 ? dx / dist : 0.0;
             double grad_y = dist > 1e-4 ? dy / dist : 0.0;
 
-            const Eigen::Index obstacle_row = n_eq_ + n_ineq_ + constraint_idx;
-            const Eigen::Index slack_row = obstacle_row + n_obstacle_constraints_;
+            const Eigen::Index obstacle_row = num_equality_constraints_ + num_inequality_constraints_ + constraint_idx;
+            const Eigen::Index slack_row = obstacle_row + num_obstacle_constraints_;
             constraint_triplets.emplace_back(obstacle_row, state_dim_ * time_step, grad_x);
             constraint_triplets.emplace_back(obstacle_row, state_dim_ * time_step + 1, grad_y);
             constraint_triplets.emplace_back(obstacle_row, slack_idx, 1.0);
             constraint_triplets.emplace_back(slack_row, slack_idx, 1.0);
-            bobs_lower(constraint_idx) = d_safe - dist;
-            bobs_upper(constraint_idx) = std::numeric_limits<double>::infinity();
-            bobs_lower(n_obstacle_constraints_ + constraint_idx) = 0.0;
-            bobs_upper(n_obstacle_constraints_ + constraint_idx) = std::numeric_limits<double>::infinity();
+            obstacle_lower_bound(constraint_idx) = safety_distance - dist;
+            obstacle_upper_bound(constraint_idx) = std::numeric_limits<double>::infinity();
+            obstacle_lower_bound(num_obstacle_constraints_ + constraint_idx) = 0.0;
+            obstacle_upper_bound(num_obstacle_constraints_ + constraint_idx) = std::numeric_limits<double>::infinity();
 
             constraint_idx++;
             slack_idx++;
         }
     }
 
-    Eigen::SparseMatrix<double> h(total_vars_all_slack_, total_vars_all_slack_);
-    h.setFromTriplets(hessian_triplets.begin(), hessian_triplets.end());
+    Eigen::SparseMatrix<double> hessian(num_total_variables_with_slack_, num_total_variables_with_slack_);
+    hessian.setFromTriplets(hessian_triplets.begin(), hessian_triplets.end());
 
-    Eigen::SparseMatrix<double> a(total_constraints_, total_vars_all_slack_);
-    a.setFromTriplets(constraint_triplets.begin(), constraint_triplets.end());
-    Eigen::VectorXd lower_bound(total_constraints_);
-    Eigen::VectorXd upper_bound(total_constraints_);
+    Eigen::SparseMatrix<double> constraint_matrix(num_total_constraints_, num_total_variables_with_slack_);
+    constraint_matrix.setFromTriplets(constraint_triplets.begin(), constraint_triplets.end());
+    Eigen::VectorXd lower_bound(num_total_constraints_);
+    Eigen::VectorXd upper_bound(num_total_constraints_);
 
-    lower_bound.head(n_eq_) = beq;
-    upper_bound.head(n_eq_) = beq;
-    lower_bound.segment(n_eq_, n_ineq_) = bineq_lower;
-    upper_bound.segment(n_eq_, n_ineq_) = bineq_upper;
-    lower_bound.segment(n_eq_ + n_ineq_, n_obstacle_constraints_ + n_obstacle_slack_) = bobs_lower;
-    upper_bound.segment(n_eq_ + n_ineq_, n_obstacle_constraints_ + n_obstacle_slack_) = bobs_upper;
+    lower_bound.head(num_equality_constraints_) = equality_vector;
+    upper_bound.head(num_equality_constraints_) = equality_vector;
+    lower_bound.segment(num_equality_constraints_, num_inequality_constraints_) = inequality_lower_bound;
+    upper_bound.segment(num_equality_constraints_, num_inequality_constraints_) = inequality_upper_bound;
+    lower_bound.segment(num_equality_constraints_ + num_inequality_constraints_,
+                        num_obstacle_constraints_ + num_obstacle_slack_variables_) = obstacle_lower_bound;
+    upper_bound.segment(num_equality_constraints_ + num_inequality_constraints_,
+                        num_obstacle_constraints_ + num_obstacle_slack_variables_) = obstacle_upper_bound;
 
-    return {h, f, a, lower_bound, upper_bound};
+    return {hessian, gradient, constraint_matrix, lower_bound, upper_bound};
 }
 
 }  // namespace optimal_parking
