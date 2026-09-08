@@ -51,3 +51,5 @@ CheckOptions:
     value: CamelCase
   - key: readability-identifier-naming.TemplateParameterCase
     value: CamelCase
+  - key: readability-identifier-naming.TemplateParameterIgnoredRegexp
+    value: 'expr-type'

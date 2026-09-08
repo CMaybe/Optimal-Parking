@@ -54,8 +54,8 @@ private:
 
     Eigen::Index prediction_horizon_;
 
-    static constexpr Eigen::Index state_dim_ = 5;
-    static constexpr Eigen::Index input_dim_ = 2;
+    static constexpr Eigen::Index kStateDim = 5;
+    static constexpr Eigen::Index kInputDim = 2;
 
     Eigen::Index num_state_variables_, num_input_variables_, num_decision_variables_;
     Eigen::Index num_equality_constraints_;
