@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 
 const BASE_SCALE = 14; // pixels per meter at zoom = 1
-const SAMPLE_TIME = 0.2; // seconds between path samples (matches example/config.yaml Ts)
 const HANDLE_RADIUS_M = 0.35;
 const MIN_ZOOM = 0.15;
 const MAX_ZOOM = 8;
+const MIN_OBSTACLE_SIZE_M = 0.5;
 const DEFAULT_VIEW = { centerX: 0, centerY: 2, zoom: 1 };
 
 const DEFAULT_OBSTACLES = [
@@ -19,7 +19,15 @@ const DEFAULT_PARAMS = {
   goalPenalty: 200,
   obstaclePenalty: 20,
   sqpIterations: 30,
-  qpIterations: 500
+  qpIterations: 500,
+  trajectoryTime: 20,
+  sampleTime: 0.2,
+  stateWeight: [0.1, 0.1, 0.1, 0.01, 0.01],
+  inputWeight: [1.0, 10.0],
+  inputLower: [-1.0, -1.0],
+  inputUpper: [2.0, 2.0],
+  velocitySteerLower: [-10.0, -0.63792],
+  velocitySteerUpper: [10.0, 0.63792]
 };
 
 // ---------------------------------------------------------------------------
@@ -40,8 +48,37 @@ function canvasToWorld(px, py, width, height, view) {
   return [(px - width / 2) / scale + view.centerX, -(py - height / 2) / scale + view.centerY];
 }
 
+// A point offset by (dx, dy) in the pose's own rotated (heading, left) frame.
+function localAxisPoint(pose, dx, dy) {
+  const cos = Math.cos(pose.yaw);
+  const sin = Math.sin(pose.yaw);
+  return { x: pose.x + dx * cos - dy * sin, y: pose.y + dx * sin + dy * cos };
+}
+
 function headingHandlePosition(pose, reach) {
-  return { x: pose.x + Math.cos(pose.yaw) * reach, y: pose.y + Math.sin(pose.yaw) * reach };
+  return localAxisPoint(pose, reach, 0);
+}
+
+function obstacleRotateHandlePosition(obstacle) {
+  return localAxisPoint(obstacle, obstacle.length / 2 + 1, obstacle.width / 2 + 1);
+}
+
+function obstacleLengthHandlePosition(obstacle) {
+  return localAxisPoint(obstacle, obstacle.length / 2, 0);
+}
+
+function obstacleWidthHandlePosition(obstacle) {
+  return localAxisPoint(obstacle, 0, obstacle.width / 2);
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+// Interpolates an angle along the shorter direction so it doesn't spin the long way around.
+function lerpAngle(a, b, t) {
+  const delta = Math.atan2(Math.sin(b - a), Math.cos(b - a));
+  return a + delta * t;
 }
 
 // ---------------------------------------------------------------------------
@@ -53,8 +90,7 @@ function drawGrid(ctx, width, height, view) {
   ctx.lineWidth = 1;
   const scale = viewScale(view);
   const step = scale * 2; // every 2 meters
-  const [originX] = worldToCanvas(0, 0, width, height, view);
-  const [, originY] = worldToCanvas(0, 0, width, height, view);
+  const [originX, originY] = worldToCanvas(0, 0, width, height, view);
   for (let x = originX % step; x < width; x += step) {
     ctx.beginPath();
     ctx.moveTo(x, 0);
@@ -67,6 +103,20 @@ function drawGrid(ctx, width, height, view) {
     ctx.lineTo(width, y);
     ctx.stroke();
   }
+}
+
+function drawHandleDot(ctx, worldPoint, width, height, view, color = "#fff") {
+  const [hx, hy] = worldToCanvas(worldPoint.x, worldPoint.y, width, height, view);
+  ctx.beginPath();
+  ctx.arc(hx, hy, 6, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+}
+
+function drawHandleSquare(ctx, worldPoint, width, height, view, color = "#ffb454") {
+  const [hx, hy] = worldToCanvas(worldPoint.x, worldPoint.y, width, height, view);
+  ctx.fillStyle = color;
+  ctx.fillRect(hx - 5, hy - 5, 10, 10);
 }
 
 function drawCar(ctx, pose, color, width, height, view, options = {}) {
@@ -85,21 +135,12 @@ function drawCar(ctx, pose, color, width, height, view, options = {}) {
   ctx.restore();
 
   if (options.showHandle) {
-    const handle = headingHandlePosition(pose, HANDLE_RADIUS_M + 1.4);
-    const [hx, hy] = worldToCanvas(handle.x, handle.y, width, height, view);
-    ctx.beginPath();
-    ctx.arc(hx, hy, 6, 0, Math.PI * 2);
-    ctx.fillStyle = "#fff";
-    ctx.fill();
+    drawHandleDot(ctx, headingHandlePosition(pose, HANDLE_RADIUS_M + 1.4), width, height, view);
   }
 }
 
-function obstacleHandleReach(obstacle) {
-  return obstacle.length / 2 + 1;
-}
-
 function drawScene(ctx, canvas, state) {
-  const { obstacles, initialPose, goalPose, path, animatedPose, dragTarget, view } = state;
+  const { obstacles, initialPose, goalPose, path, animatedPose, dragTarget, selection, view } = state;
   const { width, height } = canvas;
   const scale = viewScale(view);
   ctx.clearRect(0, 0, width, height);
@@ -108,22 +149,25 @@ function drawScene(ctx, canvas, state) {
   drawGrid(ctx, width, height, view);
 
   obstacles.forEach((obstacle, index) => {
+    const isSelected = selection?.type === "obstacle" && selection.index === index;
+    const isDragging = dragTarget?.type === "obstacle" && dragTarget.index === index;
     const [cx, cy] = worldToCanvas(obstacle.x, obstacle.y, width, height, view);
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(-obstacle.yaw);
-    const active = dragTarget && dragTarget.type === "obstacle" && dragTarget.index === index;
-    ctx.fillStyle = active ? "#e07b39" : "#4a4f58";
+    ctx.fillStyle = isDragging ? "#e07b39" : isSelected ? "#6b7280" : "#4a4f58";
     ctx.fillRect((-obstacle.length / 2) * scale, (-obstacle.width / 2) * scale, obstacle.length * scale, obstacle.width * scale);
+    if (isSelected) {
+      ctx.strokeStyle = "#ffb454";
+      ctx.lineWidth = 2;
+      ctx.strokeRect((-obstacle.length / 2) * scale, (-obstacle.width / 2) * scale, obstacle.length * scale, obstacle.width * scale);
+    }
     ctx.restore();
 
-    if (dragTarget?.type === "obstacle" && dragTarget.index === index) {
-      const handle = headingHandlePosition(obstacle, obstacleHandleReach(obstacle));
-      const [hx, hy] = worldToCanvas(handle.x, handle.y, width, height, view);
-      ctx.beginPath();
-      ctx.arc(hx, hy, 6, 0, Math.PI * 2);
-      ctx.fillStyle = "#fff";
-      ctx.fill();
+    if (isSelected) {
+      drawHandleDot(ctx, obstacleRotateHandlePosition(obstacle), width, height, view);
+      drawHandleSquare(ctx, obstacleLengthHandlePosition(obstacle), width, height, view);
+      drawHandleSquare(ctx, obstacleWidthHandlePosition(obstacle), width, height, view);
     }
   });
 
@@ -140,10 +184,10 @@ function drawScene(ctx, canvas, state) {
   }
 
   drawCar(ctx, initialPose, "#63d471", width, height, view, {
-    showHandle: dragTarget?.type === "pose" && dragTarget.which === "initial"
+    showHandle: selection?.type === "pose" && selection.which === "initial"
   });
   drawCar(ctx, goalPose, "#ff5c8a", width, height, view, {
-    showHandle: dragTarget?.type === "pose" && dragTarget.which === "goal"
+    showHandle: selection?.type === "pose" && selection.which === "goal"
   });
 
   if (animatedPose) {
@@ -194,6 +238,30 @@ function SliderRow({ label, value, min, max, step, onChange, format }) {
   );
 }
 
+// A labelled row of small number inputs, one per vector component (e.g. state weight [x,y,yaw,v,steer]).
+function VectorRow({ label, labels, values, step = 0.01, onChange }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
+      <span style={{ width: 44, fontSize: 12, color: "#c9d3e0" }}>{label}</span>
+      {values.map((value, i) => (
+        <input
+          key={i}
+          type="number"
+          step={step}
+          value={value}
+          title={labels?.[i]}
+          onChange={(e) => {
+            const next = values.slice();
+            next[i] = parseFloat(e.target.value) || 0;
+            onChange(next);
+          }}
+          style={{ width: 46 }}
+        />
+      ))}
+    </div>
+  );
+}
+
 function PoseControls({ label, color, pose, onChange }) {
   return (
     <Panel title={<span style={{ color }}>{label}</span>}>
@@ -218,12 +286,12 @@ function ObstaclesPanel({ obstacles, onChange, onAdd, onRemove }) {
       {obstacles.map((obstacle, index) => (
         <div key={index} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
           <span style={{ width: 16, fontSize: 12, color: "#c9d3e0" }}>{index + 1}</span>
-          {["x", "y", "length", "width"].map((field) => (
+          {["x", "y", "length", "width", "yaw"].map((field) => (
             <input
               key={field}
               type="number"
               step="0.1"
-              value={obstacle[field]}
+              value={field === "yaw" ? obstacle[field].toFixed(2) : obstacle[field]}
               onChange={(e) => {
                 const value = parseFloat(e.target.value) || 0;
                 onChange(obstacles.map((o, i) => (i === index ? { ...o, [field]: value } : o)));
@@ -240,11 +308,15 @@ function ObstaclesPanel({ obstacles, onChange, onAdd, onRemove }) {
       <button onClick={onAdd} style={{ width: "100%", marginTop: 4 }}>
         + Add obstacle
       </button>
+      <p style={{ fontSize: 11, color: "#8b93a3", margin: "6px 0 0" }}>
+        Select an obstacle on the canvas to drag its rotate (dot) and resize (square) handles.
+      </p>
     </Panel>
   );
 }
 
 function ParameterControls({ params, onChange }) {
+  const set = (patch) => onChange({ ...params, ...patch });
   return (
     <Panel title="Planner parameters">
       <SliderRow
@@ -254,23 +326,16 @@ function ParameterControls({ params, onChange }) {
         max={2}
         step={0.05}
         format={(v) => v.toFixed(2)}
-        onChange={(v) => onChange({ ...params, safetyMargin: v })}
+        onChange={(v) => set({ safetyMargin: v })}
       />
-      <SliderRow
-        label="goal k"
-        value={params.goalPenalty}
-        min={1}
-        max={2000}
-        step={1}
-        onChange={(v) => onChange({ ...params, goalPenalty: v })}
-      />
+      <SliderRow label="goal k" value={params.goalPenalty} min={1} max={2000} step={1} onChange={(v) => set({ goalPenalty: v })} />
       <SliderRow
         label="obs k"
         value={params.obstaclePenalty}
         min={1}
         max={200}
         step={1}
-        onChange={(v) => onChange({ ...params, obstaclePenalty: v })}
+        onChange={(v) => set({ obstaclePenalty: v })}
       />
       <SliderRow
         label="sqp #"
@@ -278,25 +343,69 @@ function ParameterControls({ params, onChange }) {
         min={1}
         max={100}
         step={1}
-        onChange={(v) => onChange({ ...params, sqpIterations: v })}
+        onChange={(v) => set({ sqpIterations: v })}
+      />
+      <SliderRow label="qp #" value={params.qpIterations} min={10} max={2000} step={10} onChange={(v) => set({ qpIterations: v })} />
+      <SliderRow
+        label="horizon"
+        value={params.trajectoryTime}
+        min={2}
+        max={60}
+        step={1}
+        format={(v) => `${v}s`}
+        onChange={(v) => set({ trajectoryTime: v })}
       />
       <SliderRow
-        label="qp #"
-        value={params.qpIterations}
-        min={10}
-        max={2000}
-        step={10}
-        onChange={(v) => onChange({ ...params, qpIterations: v })}
+        label="Ts"
+        value={params.sampleTime}
+        min={0.05}
+        max={1}
+        step={0.05}
+        format={(v) => v.toFixed(2)}
+        onChange={(v) => set({ sampleTime: v })}
+      />
+      <VectorRow
+        label="state w"
+        labels={["x", "y", "yaw", "v", "steer"]}
+        values={params.stateWeight}
+        onChange={(v) => set({ stateWeight: v })}
+      />
+      <VectorRow label="input w" labels={["accel", "steer rate"]} values={params.inputWeight} onChange={(v) => set({ inputWeight: v })} />
+      <VectorRow
+        label="input lo"
+        labels={["accel", "steer rate"]}
+        values={params.inputLower}
+        onChange={(v) => set({ inputLower: v })}
+      />
+      <VectorRow
+        label="input hi"
+        labels={["accel", "steer rate"]}
+        values={params.inputUpper}
+        onChange={(v) => set({ inputUpper: v })}
+      />
+      <VectorRow
+        label="v/steer lo"
+        labels={["velocity", "steer"]}
+        values={params.velocitySteerLower}
+        onChange={(v) => set({ velocitySteerLower: v })}
+      />
+      <VectorRow
+        label="v/steer hi"
+        labels={["velocity", "steer"]}
+        values={params.velocitySteerUpper}
+        onChange={(v) => set({ velocitySteerUpper: v })}
       />
     </Panel>
   );
 }
 
-function ReadoutPanel({ status, log, path, playback, onPlaybackChange }) {
+function ReadoutPanel({ status, log, path, sampleTime, playback, onPlaybackChange }) {
   const logRef = useRef(null);
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [log]);
+
+  const duration = path ? (path.x.length - 1) * sampleTime : 0;
 
   return (
     <Panel title="Readout" style={{ width: 320 }}>
@@ -305,7 +414,7 @@ function ReadoutPanel({ status, log, path, playback, onPlaybackChange }) {
       </div>
       {path && (
         <div style={{ fontSize: 12, marginBottom: 6 }}>
-          points: {path.x.length} · duration: {(path.x.length * SAMPLE_TIME).toFixed(1)}s
+          points: {path.x.length} · duration: {duration.toFixed(1)}s
         </div>
       )}
       {path && (
@@ -316,9 +425,10 @@ function ReadoutPanel({ status, log, path, playback, onPlaybackChange }) {
           <input
             type="range"
             min={0}
-            max={path.x.length - 1}
-            value={playback.index}
-            onChange={(e) => onPlaybackChange({ ...playback, playing: false, index: parseInt(e.target.value, 10) })}
+            max={duration}
+            step={duration / 500}
+            value={playback.time}
+            onChange={(e) => onPlaybackChange({ ...playback, playing: false, time: parseFloat(e.target.value) })}
             style={{ flex: 1 }}
           />
         </div>
@@ -356,8 +466,11 @@ export default function App() {
   const [goalPose, setGoalPose] = useState({ x: 0, y: 0, yaw: 0 });
   const [params, setParams] = useState(DEFAULT_PARAMS);
   const [path, setPath] = useState(null);
+  const [pathSampleTime, setPathSampleTime] = useState(DEFAULT_PARAMS.sampleTime);
   const [dragTarget, setDragTarget] = useState(null);
-  const [playback, setPlayback] = useState({ playing: false, index: 0 });
+  const [selection, setSelection] = useState(null);
+  // playback.time is a continuous seconds value driven by requestAnimationFrame, giving smooth interpolation.
+  const [playback, setPlayback] = useState({ playing: false, time: 0 });
   const [view, setView] = useState(DEFAULT_VIEW);
   const [canvasSize, setCanvasSize] = useState({ width: window.innerWidth, height: window.innerHeight });
 
@@ -389,29 +502,47 @@ export default function App() {
     };
   }, []);
 
+  // Continuous playback driver: advances by real elapsed time via requestAnimationFrame
+  // instead of stepping once per sample, so the car glides smoothly between path points.
+  useEffect(() => {
+    if (!playback.playing || !path) return undefined;
+    let frameId;
+    let lastTimestamp;
+    const duration = (path.x.length - 1) * pathSampleTime;
+
+    const tick = (timestamp) => {
+      if (lastTimestamp === undefined) lastTimestamp = timestamp;
+      const dt = (timestamp - lastTimestamp) / 1000;
+      lastTimestamp = timestamp;
+      setPlayback((current) => {
+        const next = current.time + dt;
+        if (next >= duration) return { playing: false, time: duration };
+        return { ...current, time: next };
+      });
+      frameId = requestAnimationFrame(tick);
+    };
+    frameId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frameId);
+  }, [playback.playing, path, pathSampleTime]);
+
   // Render loop.
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
-    const animatedPose =
-      path && path.x[playback.index] !== undefined
-        ? { x: path.x[playback.index], y: path.y[playback.index], yaw: path.yaw[playback.index] }
-        : null;
-    drawScene(ctx, canvas, { obstacles, initialPose, goalPose, path, animatedPose, dragTarget, view });
-  }, [obstacles, initialPose, goalPose, path, playback.index, dragTarget, view, canvasSize]);
-
-  // Playback driver: steps through the path at the same rate the solver sampled it.
-  useEffect(() => {
-    if (!playback.playing || !path) return undefined;
-    const id = setInterval(() => {
-      setPlayback((current) => {
-        const next = current.index + 1;
-        if (next >= path.x.length) return { ...current, playing: false };
-        return { ...current, index: next };
-      });
-    }, SAMPLE_TIME * 1000);
-    return () => clearInterval(id);
-  }, [playback.playing, path]);
+    let animatedPose = null;
+    if (path) {
+      const floatIndex = Math.min(playback.time / pathSampleTime, path.x.length - 1);
+      const i0 = Math.floor(floatIndex);
+      const i1 = Math.min(i0 + 1, path.x.length - 1);
+      const t = floatIndex - i0;
+      animatedPose = {
+        x: lerp(path.x[i0], path.x[i1], t),
+        y: lerp(path.y[i0], path.y[i1], t),
+        yaw: lerpAngle(path.yaw[i0], path.yaw[i1], t)
+      };
+    }
+    drawScene(ctx, canvas, { obstacles, initialPose, goalPose, path, animatedPose, dragTarget, selection, view });
+  }, [obstacles, initialPose, goalPose, path, playback.time, pathSampleTime, dragTarget, selection, view, canvasSize]);
 
   const handlePlan = () => {
     const planner = plannerRef.current;
@@ -426,10 +557,21 @@ export default function App() {
     planner.setObstaclePenalty(params.obstaclePenalty);
     planner.setSqpIterations(params.sqpIterations);
     planner.setQpIterations(params.qpIterations);
+    planner.setHorizon(params.trajectoryTime, params.sampleTime);
+    planner.setStateWeight(...params.stateWeight);
+    planner.setInputWeight(...params.inputWeight);
+    planner.setInputBounds(params.inputLower[0], params.inputLower[1], params.inputUpper[0], params.inputUpper[1]);
+    planner.setVelocitySteerBounds(
+      params.velocitySteerLower[0],
+      params.velocitySteerLower[1],
+      params.velocitySteerUpper[0],
+      params.velocitySteerUpper[1]
+    );
     const result = planner.plan();
     const nextPath = { x: Array.from(result.x), y: Array.from(result.y), yaw: Array.from(result.yaw) };
     setPath(nextPath);
-    setPlayback({ playing: true, index: 0 });
+    setPathSampleTime(params.sampleTime);
+    setPlayback({ playing: true, time: 0 });
     setStatus("ready");
   };
 
@@ -439,36 +581,52 @@ export default function App() {
     [obstacles]
   );
 
-  const hitTestPoseHandle = (worldX, worldY, pose) => {
-    const handle = headingHandlePosition(pose, HANDLE_RADIUS_M + 1.4);
-    return Math.hypot(worldX - handle.x, worldY - handle.y) <= 0.5;
-  };
+  const hitTestPoint = (worldX, worldY, point, radius) => Math.hypot(worldX - point.x, worldY - point.y) <= radius;
 
-  const hitTestPoseBody = (worldX, worldY, pose) => Math.hypot(worldX - pose.x, worldY - pose.y) <= 1.6;
+  const hitTestPoseHandle = (worldX, worldY, pose) => hitTestPoint(worldX, worldY, headingHandlePosition(pose, HANDLE_RADIUS_M + 1.4), 0.5);
 
-  const hitTestObstacleHandle = (worldX, worldY, index) => {
-    const obstacle = obstacles[index];
-    const handle = headingHandlePosition(obstacle, obstacleHandleReach(obstacle));
-    return Math.hypot(worldX - handle.x, worldY - handle.y) <= 0.5;
-  };
+  const hitTestPoseBody = (worldX, worldY, pose) => hitTestPoint(worldX, worldY, pose, 1.6);
 
   const handleMouseDown = (event) => {
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     const [worldX, worldY] = canvasToWorld(event.clientX - rect.left, event.clientY - rect.top, canvas.width, canvas.height, view);
 
-    if (hitTestPoseHandle(worldX, worldY, initialPose)) return setDragTarget({ type: "pose", which: "initial", mode: "rotate" });
-    if (hitTestPoseHandle(worldX, worldY, goalPose)) return setDragTarget({ type: "pose", which: "goal", mode: "rotate" });
-    if (hitTestPoseBody(worldX, worldY, initialPose)) return setDragTarget({ type: "pose", which: "initial", mode: "move" });
-    if (hitTestPoseBody(worldX, worldY, goalPose)) return setDragTarget({ type: "pose", which: "goal", mode: "move" });
+    // Handles of the currently selected object take priority so they stay clickable
+    // even though they're drawn slightly away from the object body.
+    if (selection?.type === "pose") {
+      const pose = selection.which === "initial" ? initialPose : goalPose;
+      if (hitTestPoseHandle(worldX, worldY, pose)) return setDragTarget({ type: "pose", which: selection.which, mode: "rotate" });
+    }
+    if (selection?.type === "obstacle") {
+      const obstacle = obstacles[selection.index];
+      if (hitTestPoint(worldX, worldY, obstacleRotateHandlePosition(obstacle), 0.5)) {
+        return setDragTarget({ type: "obstacle", index: selection.index, mode: "rotate" });
+      }
+      if (hitTestPoint(worldX, worldY, obstacleLengthHandlePosition(obstacle), 0.45)) {
+        return setDragTarget({ type: "obstacle", index: selection.index, mode: "resize-length" });
+      }
+      if (hitTestPoint(worldX, worldY, obstacleWidthHandlePosition(obstacle), 0.45)) {
+        return setDragTarget({ type: "obstacle", index: selection.index, mode: "resize-width" });
+      }
+    }
 
-    if (dragTarget?.type === "obstacle" && hitTestObstacleHandle(worldX, worldY, dragTarget.index)) {
-      return setDragTarget({ type: "obstacle", index: dragTarget.index, mode: "rotate" });
+    if (hitTestPoseBody(worldX, worldY, initialPose)) {
+      setSelection({ type: "pose", which: "initial" });
+      return setDragTarget({ type: "pose", which: "initial", mode: "move" });
+    }
+    if (hitTestPoseBody(worldX, worldY, goalPose)) {
+      setSelection({ type: "pose", which: "goal" });
+      return setDragTarget({ type: "pose", which: "goal", mode: "move" });
     }
 
     const obstacleIndex = hitTestObstacle(worldX, worldY);
-    if (obstacleIndex >= 0) return setDragTarget({ type: "obstacle", index: obstacleIndex, mode: "move" });
+    if (obstacleIndex >= 0) {
+      setSelection({ type: "obstacle", index: obstacleIndex });
+      return setDragTarget({ type: "obstacle", index: obstacleIndex, mode: "move" });
+    }
 
+    setSelection(null);
     setDragTarget({
       type: "pan",
       startClientX: event.clientX,
@@ -498,13 +656,21 @@ export default function App() {
     const [worldX, worldY] = canvasToWorld(event.clientX - rect.left, event.clientY - rect.top, canvas.width, canvas.height, view);
 
     if (dragTarget.type === "obstacle") {
-      if (dragTarget.mode === "rotate") {
-        setObstacles((current) =>
-          current.map((o, i) => (i === dragTarget.index ? { ...o, yaw: Math.atan2(worldY - o.y, worldX - o.x) } : o))
-        );
-      } else {
-        setObstacles((current) => current.map((o, i) => (i === dragTarget.index ? { ...o, x: worldX, y: worldY } : o)));
-      }
+      setObstacles((current) =>
+        current.map((o, i) => {
+          if (i !== dragTarget.index) return o;
+          if (dragTarget.mode === "rotate") return { ...o, yaw: Math.atan2(worldY - o.y, worldX - o.x) };
+          if (dragTarget.mode === "resize-length" || dragTarget.mode === "resize-width") {
+            const alongLength = dragTarget.mode === "resize-length";
+            const dirX = alongLength ? Math.cos(o.yaw) : -Math.sin(o.yaw);
+            const dirY = alongLength ? Math.sin(o.yaw) : Math.cos(o.yaw);
+            const projection = (worldX - o.x) * dirX + (worldY - o.y) * dirY;
+            const size = Math.max(MIN_OBSTACLE_SIZE_M, 2 * Math.abs(projection));
+            return alongLength ? { ...o, length: size } : { ...o, width: size };
+          }
+          return { ...o, x: worldX, y: worldY };
+        })
+      );
       return;
     }
 
@@ -556,6 +722,7 @@ export default function App() {
 
   const handleRemoveObstacle = (index) => {
     setObstacles((current) => current.filter((_, i) => i !== index));
+    setSelection((current) => (current?.type === "obstacle" && current.index === index ? null : current));
   };
 
   const handleDoubleClick = (event) => {
@@ -586,11 +753,11 @@ export default function App() {
         <button onClick={() => handleZoomButton(1.3)}>+</button>
       </div>
 
-      <div style={{ position: "absolute", top: 16, left: 16, width: 280 }}>
+      <div style={{ position: "absolute", top: 16, left: 16, width: 280, maxHeight: "calc(100vh - 32px)", overflowY: "auto" }}>
         <Panel title="Optimal Parking">
           <p style={{ fontSize: 12, color: "#c9d3e0", margin: "4px 0 8px" }}>
-            Drag car/obstacle bodies to move, drag the white dot to rotate. Drag empty space to pan, scroll to zoom,
-            double-click an obstacle to delete it.
+            Click a car or obstacle to select it, then drag its dot (rotate) or squares (resize). Drag empty space to
+            pan, scroll to zoom, double-click an obstacle to delete it.
           </p>
           <button onClick={handlePlan} disabled={status !== "ready"} style={{ width: "100%", padding: 8 }}>
             Plan trajectory
@@ -603,7 +770,14 @@ export default function App() {
       </div>
 
       <div style={{ position: "absolute", top: 16, right: 16 }}>
-        <ReadoutPanel status={status} log={log} path={path} playback={playback} onPlaybackChange={setPlayback} />
+        <ReadoutPanel
+          status={status}
+          log={log}
+          path={path}
+          sampleTime={pathSampleTime}
+          playback={playback}
+          onPlaybackChange={setPlayback}
+        />
       </div>
     </div>
   );
