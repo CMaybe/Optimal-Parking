@@ -11,14 +11,33 @@ by `matplotlibcpp`.
 
 ## Web demo
 
-The planner also compiles to WebAssembly and runs entirely in the browser —
-drag the car/obstacles, tune the SQP parameters, and watch it plan and
-animate the trajectory live. Every push to `main` runs
-`.github/workflows/deploy-pages.yaml`, which builds the WASM module and the
-React frontend and deploys them to GitHub Pages (set Settings > Pages >
-Build and deployment to "GitHub Actions" once for this repository).
+The planner also compiles to WebAssembly and runs entirely in the browser — no
+backend, no install. Try it live:
 
-Locally:
+**[cmaybe.github.io/Optimal-Parking](https://cmaybe.github.io/Optimal-Parking/)**
+
+![Web demo](docs/assets/web/demo.png)
+
+Every push to `main` runs `.github/workflows/deploy-pages.yaml`, which builds
+the WASM module and the React frontend and deploys them to GitHub Pages (set
+Settings > Pages > Build and deployment to "GitHub Actions" once for this
+repository).
+
+### Controls
+
+| Action | Effect |
+| --- | --- |
+| Click a car or obstacle | Select it (shows its rotate/resize handles) |
+| Drag a car/obstacle body | Move it |
+| Drag the white dot | Rotate the selected object |
+| Drag an obstacle's orange squares | Resize its length/width |
+| Double-click an obstacle | Delete it |
+| Drag empty canvas space | Pan the view |
+| Scroll wheel | Zoom toward the cursor |
+| Sidebar sliders/fields | Tune poses, obstacles, and every SQP parameter (weights, bounds, horizon, penalties, iteration counts) |
+| Plan trajectory | Runs the solver and animates the result, with live convergence logs in the Readout panel |
+
+### Local development
 
 ```bash
 source <path-to-emsdk>/emsdk_env.sh
@@ -26,6 +45,22 @@ source <path-to-emsdk>/emsdk_env.sh
 ./scripts/build_wasm.sh        # builds optimal_parking + bindings -> web/public/wasm
 cd web && npm install && npm run dev
 ```
+
+Open the printed `http://localhost:5173` (or whichever port webpack-dev-server
+picks) in a browser. To produce a static production build (the same one CI
+deploys):
+
+```bash
+cd web && npm run build   # outputs web/dist
+```
+
+Source layout:
+
+- `optimal_parking/bindings/wasm/bindings.cpp` — embind wrapper exposing
+  `TrajectoryOptimizer` to JavaScript.
+- `scripts/build_wasm_deps.sh` / `scripts/build_wasm.sh` — build the wasm
+  dependencies and the module itself; both are reused by CI.
+- `web/` — the React + webpack frontend (`web/src/App.jsx`).
 
 
 ## Features
@@ -42,6 +77,9 @@ cd web && npm install && npm run dev
   `matplotlibcpp`.
 - **Configurable parameters**: Loads vehicle dimensions, bounds, timing,
   optimization weights, and planner settings from a YAML file.
+- **Interactive web demo**: Runs the same C++ planner as WebAssembly, with a
+  drag/zoom/pan canvas UI for editing poses and obstacles and tuning every SQP
+  parameter live (see [Web demo](#web-demo)).
 - **Dev Container support**: Provides a Docker-based development environment
   for Visual Studio Code.
 
