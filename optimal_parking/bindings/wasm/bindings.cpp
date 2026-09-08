@@ -52,14 +52,17 @@ public:
         optimizer_.set_input_weight(Eigen::Vector<double, 2>(acceleration, steering_rate));
     }
 
-    void set_input_bounds(double acceleration_lower, double steering_rate_lower, double acceleration_upper, double steering_rate_upper) {
+    void set_input_bounds(double acceleration_lower,
+                          double steering_rate_lower,
+                          double acceleration_upper,
+                          double steering_rate_upper) {
         optimizer_.set_input_bounds(Eigen::Vector<double, 2>(acceleration_lower, steering_rate_lower),
-                                     Eigen::Vector<double, 2>(acceleration_upper, steering_rate_upper));
+                                    Eigen::Vector<double, 2>(acceleration_upper, steering_rate_upper));
     }
 
     void set_velocity_steer_bounds(double velocity_lower, double steer_lower, double velocity_upper, double steer_upper) {
         optimizer_.set_velocity_steer_bounds(Eigen::Vector<double, 2>(velocity_lower, steer_lower),
-                                              Eigen::Vector<double, 2>(velocity_upper, steer_upper));
+                                             Eigen::Vector<double, 2>(velocity_upper, steer_upper));
     }
 
     void set_horizon(double trajectory_time, double sample_time) { optimizer_.set_horizon(trajectory_time, sample_time); }
