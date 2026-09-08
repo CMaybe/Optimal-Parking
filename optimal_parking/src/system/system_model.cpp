@@ -1,7 +1,6 @@
 #include "optimal_parking/system/system_model.hpp"
 
 #include <cmath>
-#include <unsupported/Eigen/MatrixFunctions>
 
 #include "optimal_parking/config.hpp"
 namespace optimal_parking {
@@ -45,11 +44,11 @@ ModelMatrices SystemModel::get_system_jacobian(const SystemState& state, const S
     Eigen::Matrix<double, 5, 1> gd;
 
     // clang-format off
-        ac <<  0, 0, -state.velocity() * std::sin(state.yaw()),                     std::cos(state.yaw()),                                                                                        0,
-            0, 0,  state.velocity() * std::cos(state.yaw()),                     std::sin(state.yaw()),                                                                                        0,
+    ac <<  0, 0, -state.velocity() * std::sin(state.yaw()),                     std::cos(state.yaw()),                                                                                        0,
+           0, 0,  state.velocity() * std::cos(state.yaw()),                     std::sin(state.yaw()),                                                                                        0,
            0, 0,                                         0, std::tan(state.delta()) / vehicle_length_, state.velocity() / (vehicle_length_ * std::cos(state.delta()) * std::cos(state.delta())),
-            0, 0,                                         0,                                         0,                                                                                        0,
-            0, 0,                                         0,                                         0,                                                                                        0;
+           0, 0,                                         0,                                         0,                                                                                        0,
+           0, 0,                                         0,                                         0,                                                                                        0;
     // clang-format on
 
     // clang-format off
@@ -61,17 +60,13 @@ ModelMatrices SystemModel::get_system_jacobian(const SystemState& state, const S
     // clang-format on
     gc = state_dot - ac * state - bc * input;
 
-    Eigen::Matrix<double, 5 + 2 + 1, 5 + 2 + 1> continuous_system_matrix = Eigen::Matrix<double, 5 + 2 + 1, 5 + 2 + 1>::Zero();
+    const Eigen::Matrix<double, 5, 5> ac_dt = ac * dt;
+    const Eigen::Matrix<double, 5, 5> eye = Eigen::Matrix<double, 5, 5>::Identity();
+    const Eigen::Matrix<double, 5, 5> i_plus_half_ac_dt = eye + 0.5 * ac_dt;
 
-    continuous_system_matrix.block<5, 5>(0, 0) = ac;
-    continuous_system_matrix.block<5, 2>(0, 5) = bc;
-    continuous_system_matrix.block<5, 1>(0, 5 + 2) = gc;
-    continuous_system_matrix = continuous_system_matrix * dt;
-    const Eigen::Matrix<double, 5 + 2 + 1, 5 + 2 + 1> discrete_system_matrix = continuous_system_matrix.exp();
-
-    ad = discrete_system_matrix.block<5, 5>(0, 0);
-    bd = discrete_system_matrix.block<5, 2>(0, 5);
-    gd = discrete_system_matrix.block<5, 1>(0, 5 + 2);
+    ad = eye + ac_dt + 0.5 * (ac_dt * ac_dt);
+    bd = i_plus_half_ac_dt * (bc * dt);
+    gd = i_plus_half_ac_dt * (gc * dt);
 
     return ModelMatrices{ad, bd, gd};
 }

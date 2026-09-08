@@ -20,9 +20,7 @@ public:
     void set_obstacles(const std::vector<Obstacle>& obstacles);
     void run_sqp(const SystemModel& system_model);
     void update_trajectory_data();
-    QPData setup_qp(const SystemModel& system_model,
-                   const Eigen::Matrix<double, 5, 5>& q,
-                   const Eigen::Matrix<double, 2, 2>& r);
+    QPData setup_qp(const SystemModel& system_model, const Eigen::Matrix<double, 5, 5>& q, const Eigen::Matrix<double, 2, 2>& r);
 
     [[nodiscard]] TrajectoryData get_trajectory_data() const {
         return {path_x_, path_y_, path_yaw_, velocity_, steering_angle_, acceleration_, steering_rate_};

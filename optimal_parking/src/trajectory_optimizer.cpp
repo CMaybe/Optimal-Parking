@@ -109,45 +109,41 @@ void TrajectoryOptimizer::run_sqp(const SystemModel& system_model) {
 
         const Eigen::VectorXd& delta_solution = *solution;
         const Eigen::VectorXd delta_variables = delta_solution.head(total_vars_);
-        std::cout << "Iteration " << iter << ": delta_solution norm = " << delta_variables.norm() << std::endl;
+        const double mean_delta = delta_variables.norm() / std::sqrt(static_cast<double>(total_vars_));
+        const double max_delta = delta_variables.lpNorm<Eigen::Infinity>();
+        std::cout << "Iteration " << iter << ": max_delta = " << max_delta << ", mean_delta = " << mean_delta << std::endl;
 
-        if (delta_variables.norm() < 0.05) {
-            std::cout << "Delta solution norm: " << delta_variables.norm() << "\nConverged at iteration " << iter << "\n";
+        if (max_delta < 5e-2 || mean_delta < 1e-2) {
+            std::cout << "Converged at iteration " << iter << "\n";
             break;
         }
 
-        const auto merit = [](const Eigen::VectorXd& step,
-                              const Eigen::SparseMatrix<double>& hessian_matrix,
-                              const Eigen::VectorXd& gradient_vector,
-                              const Eigen::SparseMatrix<double>& constraint_matrix,
-                              const Eigen::VectorXd& lower_bound,
-                              const Eigen::VectorXd& upper_bound) {
-            const Eigen::VectorXd constraint_values = constraint_matrix * step;
+        const Eigen::VectorXd a_delta = linearMatrix * delta_solution;
+        const Eigen::VectorXd h_delta = hessian * delta_solution;
+        const double quad_coeff = 0.5 * delta_solution.dot(h_delta);
+        const double lin_coeff = gradient.dot(delta_solution);
+
+        const auto merit = [](double s,
+                              double quad,
+                              double lin,
+                              const Eigen::VectorXd& ax,
+                              const Eigen::VectorXd& lb,
+                              const Eigen::VectorXd& ub) {
             double violation = 0.0;
-            for (Eigen::Index i = 0; i < constraint_values.size(); ++i) {
-                violation += std::max(lower_bound(i) - constraint_values(i), 0.0);
-                violation += std::max(constraint_values(i) - upper_bound(i), 0.0);
+            for (Eigen::Index i = 0; i < ax.size(); ++i) {
+                const double val = s * ax(i);
+                violation += std::max(lb(i) - val, 0.0);
+                violation += std::max(val - ub(i), 0.0);
             }
-            return 0.5 * step.dot(hessian_matrix * step) + gradient_vector.dot(step) + 1e4 * violation;
+            return s * s * quad + s * lin + 1e4 * violation;
         };
 
-        const double current_merit =
-            merit(Eigen::VectorXd::Zero(total_vars_all_slack_), hessian, gradient, linearMatrix, lowerBound, upperBound);
+        const double current_merit = merit(0.0, quad_coeff, lin_coeff, a_delta, lowerBound, upperBound);
         double step_length = 1.0;
-        while (step_length > 1e-3 &&
-               merit(step_length * delta_solution, hessian, gradient, linearMatrix, lowerBound, upperBound) > current_merit) {
+        while (step_length > 1e-3 && merit(step_length, quad_coeff, lin_coeff, a_delta, lowerBound, upperBound) > current_merit) {
             step_length *= 0.5;
         }
         optimal_solution_ += step_length * delta_variables;
-
-        for (int i = 0; i < nx_; ++i) {
-            optimal_solution_(i) =
-                std::max(state_lowerbound_(i % state_dim_), std::min(state_upperbound_(i % state_dim_), optimal_solution_(i)));
-        }
-        for (int i = 0; i < nu_; ++i) {
-            optimal_solution_(nx_ + i) = std::max(input_lowerbound_(i % input_dim_),
-                                                  std::min(input_upperbound_(i % input_dim_), optimal_solution_(nx_ + i)));
-        }
     }
 
     update_trajectory_data();
@@ -183,6 +179,9 @@ QPData TrajectoryOptimizer::setup_qp(const SystemModel& system_model,
                                      const Eigen::Matrix<double, 2, 2>& r) {
     std::vector<Eigen::Triplet<double>> hessian_triplets;
     std::vector<Eigen::Triplet<double>> constraint_triplets;
+    hessian_triplets.reserve(static_cast<std::size_t>(total_vars_all_slack_));
+    constraint_triplets.reserve(static_cast<std::size_t>(n_eq_ * 4 + n_ineq_ + n_obstacle_constraints_ * 4));
+
     const auto add_block = [](std::vector<Eigen::Triplet<double>>& triplets,
                               Eigen::Index row_offset,
                               Eigen::Index column_offset,
@@ -233,7 +232,8 @@ QPData TrajectoryOptimizer::setup_qp(const SystemModel& system_model,
         auto [Ak, Bk, gk] = system_model.get_system_jacobian(xk, uk, ts_);
 
         const Eigen::Index equality_row = state_dim_ * (time_step + 1);
-        add_block(constraint_triplets, equality_row, state_dim_ * (time_step + 1), Eigen::MatrixXd::Identity(state_dim_, state_dim_));
+        add_block(
+            constraint_triplets, equality_row, state_dim_ * (time_step + 1), Eigen::MatrixXd::Identity(state_dim_, state_dim_));
         add_block(constraint_triplets, equality_row, state_dim_ * time_step, -Ak);
         add_block(constraint_triplets, equality_row, nx_ + input_dim_ * time_step, -Bk);
         beq.segment(state_dim_ * (time_step + 1), state_dim_) = (Ak * xk() + Bk * uk() + gk) - xk_next();
