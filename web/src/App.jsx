@@ -221,7 +221,7 @@ function Panel({ title, children, style }) {
 function SliderRow({ label, value, min, max, step, onChange, format }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-      <span style={{ width: 62, flexShrink: 0, whiteSpace: "nowrap", fontSize: 11, color: "#c9d3e0" }}>{label}</span>
+      <span style={{ width: 108, flexShrink: 0, whiteSpace: "nowrap", fontSize: 11, color: "#c9d3e0" }}>{label}</span>
       <input
         type="range"
         min={min}
@@ -238,26 +238,30 @@ function SliderRow({ label, value, min, max, step, onChange, format }) {
   );
 }
 
-// A labelled row of small number inputs, one per vector component (e.g. state weight [x,y,yaw,v,steer]).
+// A labelled group of number inputs, one per vector component (e.g. state weight [x,y,yaw,v,steer]).
+// Each component gets its own visible mini-label so the numbers aren't just anonymous boxes.
 function VectorRow({ label, labels, values, step = 0.01, onChange }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
-      <span style={{ width: 62, flexShrink: 0, whiteSpace: "nowrap", fontSize: 11, color: "#c9d3e0" }}>{label}</span>
-      {values.map((value, i) => (
-        <input
-          key={i}
-          type="number"
-          step={step}
-          value={value}
-          title={labels?.[i]}
-          onChange={(e) => {
-            const next = values.slice();
-            next[i] = parseFloat(e.target.value) || 0;
-            onChange(next);
-          }}
-          style={{ width: 0, flex: 1, minWidth: 36, fontSize: 11 }}
-        />
-      ))}
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ fontSize: 11, color: "#9fb4d1", marginBottom: 4 }}>{label}</div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {values.map((value, i) => (
+          <label key={i} style={{ display: "flex", flexDirection: "column", flex: "1 1 64px", minWidth: 60 }}>
+            <span style={{ fontSize: 10, color: "#8b93a3", marginBottom: 2, whiteSpace: "nowrap" }}>{labels?.[i] ?? i}</span>
+            <input
+              type="number"
+              step={step}
+              value={value}
+              onChange={(e) => {
+                const next = values.slice();
+                next[i] = parseFloat(e.target.value) || 0;
+                onChange(next);
+              }}
+              style={{ width: "100%", fontSize: 11, boxSizing: "border-box" }}
+            />
+          </label>
+        ))}
+      </div>
     </div>
   );
 }
@@ -320,7 +324,7 @@ function ParameterControls({ params, onChange }) {
   return (
     <Panel title="Planner parameters">
       <SliderRow
-        label="margin"
+        label="Safety margin"
         value={params.safetyMargin}
         min={0}
         max={2}
@@ -328,9 +332,16 @@ function ParameterControls({ params, onChange }) {
         format={(v) => v.toFixed(2)}
         onChange={(v) => set({ safetyMargin: v })}
       />
-      <SliderRow label="goal k" value={params.goalPenalty} min={1} max={2000} step={1} onChange={(v) => set({ goalPenalty: v })} />
       <SliderRow
-        label="obs k"
+        label="Goal penalty"
+        value={params.goalPenalty}
+        min={1}
+        max={2000}
+        step={1}
+        onChange={(v) => set({ goalPenalty: v })}
+      />
+      <SliderRow
+        label="Obstacle penalty"
         value={params.obstaclePenalty}
         min={1}
         max={200}
@@ -338,16 +349,23 @@ function ParameterControls({ params, onChange }) {
         onChange={(v) => set({ obstaclePenalty: v })}
       />
       <SliderRow
-        label="sqp #"
+        label="SQP iterations"
         value={params.sqpIterations}
         min={1}
         max={100}
         step={1}
         onChange={(v) => set({ sqpIterations: v })}
       />
-      <SliderRow label="qp #" value={params.qpIterations} min={10} max={2000} step={10} onChange={(v) => set({ qpIterations: v })} />
       <SliderRow
-        label="horizon"
+        label="QP iterations"
+        value={params.qpIterations}
+        min={10}
+        max={2000}
+        step={10}
+        onChange={(v) => set({ qpIterations: v })}
+      />
+      <SliderRow
+        label="Horizon"
         value={params.trajectoryTime}
         min={2}
         max={60}
@@ -356,7 +374,7 @@ function ParameterControls({ params, onChange }) {
         onChange={(v) => set({ trajectoryTime: v })}
       />
       <SliderRow
-        label="Ts"
+        label="Sample time"
         value={params.sampleTime}
         min={0.05}
         max={1}
@@ -365,32 +383,37 @@ function ParameterControls({ params, onChange }) {
         onChange={(v) => set({ sampleTime: v })}
       />
       <VectorRow
-        label="state w"
+        label="State weight"
         labels={["x", "y", "yaw", "v", "steer"]}
         values={params.stateWeight}
         onChange={(v) => set({ stateWeight: v })}
       />
-      <VectorRow label="input w" labels={["accel", "steer rate"]} values={params.inputWeight} onChange={(v) => set({ inputWeight: v })} />
       <VectorRow
-        label="input lo"
+        label="Input weight"
+        labels={["accel", "steer rate"]}
+        values={params.inputWeight}
+        onChange={(v) => set({ inputWeight: v })}
+      />
+      <VectorRow
+        label="Input lower bound"
         labels={["accel", "steer rate"]}
         values={params.inputLower}
         onChange={(v) => set({ inputLower: v })}
       />
       <VectorRow
-        label="input hi"
+        label="Input upper bound"
         labels={["accel", "steer rate"]}
         values={params.inputUpper}
         onChange={(v) => set({ inputUpper: v })}
       />
       <VectorRow
-        label="v/steer lo"
+        label="Velocity / steer lower bound"
         labels={["velocity", "steer"]}
         values={params.velocitySteerLower}
         onChange={(v) => set({ velocitySteerLower: v })}
       />
       <VectorRow
-        label="v/steer hi"
+        label="Velocity / steer upper bound"
         labels={["velocity", "steer"]}
         values={params.velocitySteerUpper}
         onChange={(v) => set({ velocitySteerUpper: v })}
