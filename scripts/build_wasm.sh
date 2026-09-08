@@ -6,6 +6,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WASM_DEPS_PREFIX="${WASM_DEPS_PREFIX:-$HOME/wasm-deps/install}"
+EIGEN3_INCLUDE_DIR="${EIGEN3_INCLUDE_DIR:-/usr/local/include/eigen3}"
 OUT_DIR="$ROOT_DIR/web/public/wasm"
 BUILD_DIR="$ROOT_DIR/optimal_parking/build-wasm"
 
@@ -18,7 +19,7 @@ mkdir -p "$BUILD_DIR/objs" "$OUT_DIR"
 
 INCLUDES=(
     "-I$ROOT_DIR/optimal_parking/include"
-    "-I/usr/local/include/eigen3"
+    "-I$EIGEN3_INCLUDE_DIR"
     "-I$WASM_DEPS_PREFIX/include"
     "-I$WASM_DEPS_PREFIX/include/osqp"
     "-I$WASM_DEPS_PREFIX/include/yaml-cpp"

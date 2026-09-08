@@ -507,10 +507,11 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     // planner.js is a runtime asset (not part of the webpack graph); load it as a plain URL.
-    import(/* webpackIgnore: true */ "/wasm/planner.js")
+    // Relative (not "/wasm/...") so this also works under a GitHub Pages project subpath.
+    import(/* webpackIgnore: true */ "./wasm/planner.js")
       .then(({ default: createPlannerModule }) =>
         createPlannerModule({
-          locateFile: (path) => `/wasm/${path}`,
+          locateFile: (path) => `./wasm/${path}`,
           print: (line) => setLog((current) => [...current.slice(-199), line]),
           printErr: (line) => setLog((current) => [...current.slice(-199), line])
         })

@@ -1,12 +1,32 @@
 # Optimal Parking
 
 [![Build and test](https://github.com/CMaybe/Optimal-Parking/actions/workflows/optimal-parking.yaml/badge.svg)](https://github.com/CMaybe/Optimal-Parking/actions/workflows/optimal-parking.yaml)
+[![Deploy Pages](https://github.com/CMaybe/Optimal-Parking/actions/workflows/deploy-pages.yaml/badge.svg)](https://github.com/CMaybe/Optimal-Parking/actions/workflows/deploy-pages.yaml)
 
 Optimal Parking generates and visualizes vehicle trajectories for parking
 scenarios using a kinematic vehicle model and numerical optimization. The
 planner uses RRT* to generate an initial geometric path and an SQP-like
 sequence of quadratic programs (QPs) to refine it. Visualization is provided
 by `matplotlibcpp`.
+
+## Web demo
+
+The planner also compiles to WebAssembly and runs entirely in the browser —
+drag the car/obstacles, tune the SQP parameters, and watch it plan and
+animate the trajectory live. Every push to `main` runs
+`.github/workflows/deploy-pages.yaml`, which builds the WASM module and the
+React frontend and deploys them to GitHub Pages (set Settings > Pages >
+Build and deployment to "GitHub Actions" once for this repository).
+
+Locally:
+
+```bash
+source <path-to-emsdk>/emsdk_env.sh
+./scripts/build_wasm_deps.sh   # builds OSQP/osqp-eigen/yaml-cpp for wasm (one-time)
+./scripts/build_wasm.sh        # builds optimal_parking + bindings -> web/public/wasm
+cd web && npm install && npm run dev
+```
+
 
 ## Features
 
