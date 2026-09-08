@@ -38,6 +38,12 @@ public:
         optimizer_.set_obstacles(obstacles);
     }
 
+    void set_safety_margin(double value) { optimizer_.set_safety_margin(value); }
+    void set_goal_penalty(double value) { optimizer_.set_goal_penalty_weight(value); }
+    void set_obstacle_penalty(double value) { optimizer_.set_obstacle_penalty_weight(value); }
+    void set_sqp_iterations(int value) { optimizer_.set_max_sqp_iterations(value); }
+    void set_qp_iterations(int value) { optimizer_.set_max_qp_iterations(value); }
+
     val plan() {
         optimizer_.run_sqp(model_);
         const TrajectoryData data = optimizer_.get_trajectory_data();
@@ -66,5 +72,10 @@ EMSCRIPTEN_BINDINGS(optimal_parking) {
         .function("setInitialPose", &Planner::set_initial_pose)
         .function("setGoalPose", &Planner::set_goal_pose)
         .function("setObstacles", &Planner::set_obstacles)
+        .function("setSafetyMargin", &Planner::set_safety_margin)
+        .function("setGoalPenalty", &Planner::set_goal_penalty)
+        .function("setObstaclePenalty", &Planner::set_obstacle_penalty)
+        .function("setSqpIterations", &Planner::set_sqp_iterations)
+        .function("setQpIterations", &Planner::set_qp_iterations)
         .function("plan", &Planner::plan);
 }
