@@ -1,6 +1,13 @@
 # build directories
 build 
+build-wasm
 install
+
+# Web frontend build artifacts
+web/node_modules/
+web/dist/
+web/public/wasm/
+
 # Logs and temporary files
 /log/
 /logs/
