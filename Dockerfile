@@ -23,6 +23,7 @@ RUN apt-get update \
     apt-utils \
     bash-completion \
     clang-format \
+    clang-tidy \
     dirmngr \
     gdb \
     sshpass \

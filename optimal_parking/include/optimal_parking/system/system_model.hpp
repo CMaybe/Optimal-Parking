@@ -1,8 +1,7 @@
-#ifndef SYSTEM_MODEL_HPP
-#define SYSTEM_MODEL_HPP
+#pragma once
 
 #include <Eigen/Dense>
-#include <cmath>
+#include <string>
 
 #include "optimal_parking/system/system_input.hpp"
 #include "optimal_parking/system/system_state.hpp"
@@ -13,22 +12,21 @@ namespace optimal_parking {
 class SystemModel {
 public:
     SystemModel() = default;
-    SystemModel(const double& vehicle_length, const double& vehicle_width);
+    SystemModel(double vehicle_length, double vehicle_width);
     SystemModel(const std::string& path);
-    SystemModel(const SystemModel& other);
     void initialize(const std::string& path);
-    void initialize(const double& vehicle_length, const double& vehicle_width);
+    void initialize(double vehicle_length, double vehicle_width);
 
-    Eigen::Vector<double, 5> f(const SystemState& state, const SystemInput& input) const;
-    ModelMatrices getSystemJacobian(const SystemState& state, const SystemInput& input, const double& dt) const;
-    inline double vehicle_length() const { return vehicle_length_; };
-    inline double vehicle_width() const { return vehicle_width_; };
+    [[nodiscard]] Eigen::Vector<double, 5> evaluate_dynamics(const SystemState& state, const SystemInput& input) const;
+    [[nodiscard]] ModelMatrices compute_discrete_linearization(const SystemState& state,
+                                                               const SystemInput& input,
+                                                               double time_step) const;
+    [[nodiscard]] inline double vehicle_length() const { return vehicle_length_; };
+    [[nodiscard]] inline double vehicle_width() const { return vehicle_width_; };
 
 private:
-    double vehicle_length_;
-    double vehicle_width_;
+    double vehicle_length_ = 0.0;
+    double vehicle_width_ = 0.0;
 };
 
 }  // namespace optimal_parking
-
-#endif  // SYSTEM_MODEL_HPP

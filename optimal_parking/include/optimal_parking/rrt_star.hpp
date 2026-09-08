@@ -12,7 +12,7 @@ namespace optimal_parking {
 
 class RRTStar {
 public:
-    RRTStar(const std::vector<Obstacle>& obstacles,
+    RRTStar(std::vector<Obstacle> obstacles,
             const double& map_x_min,
             const double& map_x_max,
             const double& map_y_min,
@@ -24,13 +24,14 @@ public:
             const int& max_iterations,
             const double& vehicle_length,
             const double& vehicle_width);
-    bool checkCollision(const Eigen::Vector3d& state);
-    bool checkPathCollision(const Eigen::Vector3d& from, const Eigen::Vector3d& to);
-    Eigen::Vector3d step(const Eigen::Vector3d& from, const Eigen::Vector3d& to);
-    std::shared_ptr<Node> getNearestNode(const std::vector<std::shared_ptr<Node>>& nodes, const Eigen::Vector3d& point);
-    std::vector<std::shared_ptr<Node>> findNearbyNodes(const std::vector<std::shared_ptr<Node>>& nodes,
-                                                       const Eigen::Vector3d& point);
-    std::vector<Eigen::Vector3d> makePath(const Eigen::Vector3d& start, const Eigen::Vector3d& goal, const size_t& path_length);
+    void set_obstacles(const std::vector<Obstacle>& obstacles);
+    bool check_collision(const Eigen::Vector3d& state);
+    bool check_path_collision(const Eigen::Vector3d& from, const Eigen::Vector3d& to);
+    [[nodiscard]] Eigen::Vector3d step(const Eigen::Vector3d& from, const Eigen::Vector3d& to) const;
+    static std::shared_ptr<Node> get_nearest_node(const std::vector<std::shared_ptr<Node>>& nodes, const Eigen::Vector3d& point);
+    [[nodiscard]] std::vector<std::shared_ptr<Node>> find_nearby_nodes(const std::vector<std::shared_ptr<Node>>& nodes,
+                                                                       const Eigen::Vector3d& point) const;
+    std::vector<Eigen::Vector3d> make_path(const Eigen::Vector3d& start, const Eigen::Vector3d& goal, const size_t& path_length);
 
 private:
     std::vector<Obstacle> obstacles_;
@@ -48,7 +49,7 @@ private:
     std::uniform_real_distribution<> y_dist_;
     std::uniform_real_distribution<> theta_dist_;
     std::uniform_real_distribution<> bias_dist_;
-    std::vector<Eigen::Vector3d> resamplePath(const std::vector<Eigen::Vector3d>& path, size_t path_length);
+    static std::vector<Eigen::Vector3d> resample_path(const std::vector<Eigen::Vector3d>& path, size_t target_length);
 };
 
 };  // namespace optimal_parking

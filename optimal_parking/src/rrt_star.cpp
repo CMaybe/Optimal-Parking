@@ -1,7 +1,9 @@
 #include "optimal_parking/rrt_star.hpp"
 
+#include <utility>
+
 namespace optimal_parking {
-RRTStar::RRTStar(const std::vector<Obstacle>& obstacles,
+RRTStar::RRTStar(std::vector<Obstacle> obstacles,
                  const double& map_x_min,
                  const double& map_x_max,
                  const double& map_y_min,
@@ -13,7 +15,7 @@ RRTStar::RRTStar(const std::vector<Obstacle>& obstacles,
                  const int& max_iterations,
                  const double& vehicle_length,
                  const double& vehicle_width)
-    : obstacles_(obstacles)
+    : obstacles_(std::move(obstacles))
     , goal_radius_(goal_radius)
     , goal_bias_(goal_bias)
     , step_dist_(step_dist)
@@ -27,38 +29,40 @@ RRTStar::RRTStar(const std::vector<Obstacle>& obstacles,
     , theta_dist_(-M_PI, M_PI)
     , bias_dist_(0.0, 1.0) {}
 
-bool RRTStar::checkCollision(const Eigen::Vector3d& state) {
+void RRTStar::set_obstacles(const std::vector<Obstacle>& obstacles) { obstacles_ = obstacles; }
+
+bool RRTStar::check_collision(const Eigen::Vector3d& state) {
     Eigen::Vector2d pos = state.head<2>();
-    double theta = state(2);
-    Eigen::Matrix2d vehicle_rotate;
-    vehicle_rotate << std::cos(theta), -std::sin(theta), std::sin(theta), std::cos(theta);
+    const double vehicle_radius = 0.5 * std::hypot(vehicle_length_, vehicle_width_);
 
     for (const auto& obs : obstacles_) {
         Eigen::Vector2d rel_pos = pos - obs.center;
         Eigen::Matrix2d obs_rotate;
         obs_rotate << std::cos(obs.yaw), std::sin(obs.yaw), -std::sin(obs.yaw), std::cos(obs.yaw);
         rel_pos = obs_rotate * rel_pos;
-        if (std::abs(rel_pos(0)) < (obs.length / 2 + vehicle_length_ / 2) &&
-            std::abs(rel_pos(1)) < (obs.width / 2 + vehicle_width_ / 2)) {
+        const double dx = std::max(std::abs(rel_pos(0)) - obs.length / 2, 0.0);
+        const double dy = std::max(std::abs(rel_pos(1)) - obs.width / 2, 0.0);
+        if (std::hypot(dx, dy) < vehicle_radius) {
             return true;
         }
     }
     return false;
 }
 
-bool RRTStar::checkPathCollision(const Eigen::Vector3d& from, const Eigen::Vector3d& to) {
-    const int num_steps = 10;
+bool RRTStar::check_path_collision(const Eigen::Vector3d& from, const Eigen::Vector3d& to) {
+    const double spatial_distance = (to.head<2>() - from.head<2>()).norm();
+    const int num_steps = std::max(1, static_cast<int>(std::ceil(spatial_distance / 0.1)));
     for (int i = 1; i <= num_steps; ++i) {
         double t = static_cast<double>(i) / num_steps;
         Eigen::Vector3d interp_state = from + t * (to - from);
-        if (checkCollision(interp_state)) {
+        if (check_collision(interp_state)) {
             return false;
         }
     }
     return true;
 }
 
-std::shared_ptr<Node> RRTStar::getNearestNode(const std::vector<std::shared_ptr<Node>>& nodes, const Eigen::Vector3d& point) {
+std::shared_ptr<Node> RRTStar::get_nearest_node(const std::vector<std::shared_ptr<Node>>& nodes, const Eigen::Vector3d& point) {
     std::shared_ptr<Node> nearest = nullptr;
     double min_dist = std::numeric_limits<double>::max();
     for (const auto& node : nodes) {
@@ -71,7 +75,7 @@ std::shared_ptr<Node> RRTStar::getNearestNode(const std::vector<std::shared_ptr<
     return nearest;
 }
 
-Eigen::Vector3d RRTStar::step(const Eigen::Vector3d& from, const Eigen::Vector3d& to) {
+Eigen::Vector3d RRTStar::step(const Eigen::Vector3d& from, const Eigen::Vector3d& to) const {
     double dist = (to - from).norm();
     if (dist < step_dist_) {
         return to;
@@ -79,8 +83,8 @@ Eigen::Vector3d RRTStar::step(const Eigen::Vector3d& from, const Eigen::Vector3d
     return from + (to - from) * (step_dist_ / dist);
 }
 
-std::vector<std::shared_ptr<Node>> RRTStar::findNearbyNodes(const std::vector<std::shared_ptr<Node>>& nodes,
-                                                            const Eigen::Vector3d& point) {
+std::vector<std::shared_ptr<Node>> RRTStar::find_nearby_nodes(const std::vector<std::shared_ptr<Node>>& nodes,
+                                                              const Eigen::Vector3d& point) const {
     std::vector<std::shared_ptr<Node>> nearby;
     for (const auto& node : nodes) {
         if ((node->state - point).norm() < rewire_radius_) {
@@ -90,9 +94,9 @@ std::vector<std::shared_ptr<Node>> RRTStar::findNearbyNodes(const std::vector<st
     return nearby;
 }
 
-std::vector<Eigen::Vector3d> RRTStar::makePath(const Eigen::Vector3d& start,
-                                               const Eigen::Vector3d& goal,
-                                               const size_t& path_length) {
+std::vector<Eigen::Vector3d> RRTStar::make_path(const Eigen::Vector3d& start,
+                                                const Eigen::Vector3d& goal,
+                                                const size_t& path_length) {
     std::vector<std::shared_ptr<Node>> nodes;
     std::vector<Eigen::Vector3d> path;
     auto start_node = std::make_shared<Node>();
@@ -108,17 +112,17 @@ std::vector<Eigen::Vector3d> RRTStar::makePath(const Eigen::Vector3d& start,
             rand_point = Eigen::Vector3d(x_dist_(gen_), y_dist_(gen_), theta_dist_(gen_));
         }
 
-        auto nearest_node = getNearestNode(nodes, rand_point);
+        auto nearest_node = get_nearest_node(nodes, rand_point);
         auto new_state = step(nearest_node->state, rand_point);
-        if (!checkCollision(new_state) && checkPathCollision(nearest_node->state, new_state)) {
+        if (!check_collision(new_state) && check_path_collision(nearest_node->state, new_state)) {
             auto new_node = std::make_shared<Node>();
             new_node->state = new_state;
             new_node->cost = nearest_node->cost + (new_state - nearest_node->state).norm();
             new_node->parent = nearest_node;
-            auto nearby_nodes = findNearbyNodes(nodes, new_state);
+            auto nearby_nodes = find_nearby_nodes(nodes, new_state);
             for (auto& near_node : nearby_nodes) {
                 double new_cost = near_node->cost + (new_state - near_node->state).norm();
-                if (new_cost < new_node->cost && checkPathCollision(near_node->state, new_state)) {
+                if (new_cost < new_node->cost && check_path_collision(near_node->state, new_state)) {
                     new_node->parent = near_node;
                     new_node->cost = new_cost;
                 }
@@ -126,7 +130,7 @@ std::vector<Eigen::Vector3d> RRTStar::makePath(const Eigen::Vector3d& start,
             nodes.push_back(new_node);
             for (auto& near_node : nearby_nodes) {
                 double new_cost = new_node->cost + (near_node->state - new_state).norm();
-                if (new_cost < near_node->cost && checkPathCollision(new_state, near_node->state)) {
+                if (new_cost < near_node->cost && check_path_collision(new_state, near_node->state)) {
                     near_node->parent = new_node;
                     near_node->cost = new_cost;
                 }
@@ -145,7 +149,7 @@ std::vector<Eigen::Vector3d> RRTStar::makePath(const Eigen::Vector3d& start,
                     current = current->parent;
                 }
                 std::reverse(path.begin(), path.end());
-                return resamplePath(path, path_length);
+                return resample_path(path, path_length);
             }
         }
     }
@@ -153,9 +157,11 @@ std::vector<Eigen::Vector3d> RRTStar::makePath(const Eigen::Vector3d& start,
     return path;
 }
 
-std::vector<Eigen::Vector3d> RRTStar::resamplePath(const std::vector<Eigen::Vector3d>& path, size_t target_length) {
+std::vector<Eigen::Vector3d> RRTStar::resample_path(const std::vector<Eigen::Vector3d>& path, size_t target_length) {
     std::vector<Eigen::Vector3d> resampled_path;
-    if (path.size() < 2 || target_length == 0) return path;
+    if (path.size() < 2 || target_length < 2) {
+        return path;
+    }
 
     double total_distance = 0.0;
     std::vector<double> distances(path.size(), 0.0);
@@ -163,13 +169,20 @@ std::vector<Eigen::Vector3d> RRTStar::resamplePath(const std::vector<Eigen::Vect
         total_distance += (path[i] - path[i - 1]).norm();
         distances[i] = total_distance;
     }
+    if (total_distance <= std::numeric_limits<double>::epsilon()) {
+        return {target_length, path.front()};
+    }
     resampled_path.push_back(path[0]);
-    double step = total_distance / (target_length - 1);
+    double step = total_distance / static_cast<double>(target_length - 1);
     for (size_t i = 1; i < target_length - 1; ++i) {
-        double target_dist = i * step;
+        double target_dist = static_cast<double>(i) * step;
         for (size_t j = 1; j < path.size(); ++j) {
             if (distances[j] >= target_dist) {
-                double t = (target_dist - distances[j - 1]) / (distances[j] - distances[j - 1]);
+                const double segment_distance = distances[j] - distances[j - 1];
+                if (segment_distance <= std::numeric_limits<double>::epsilon()) {
+                    continue;
+                }
+                double t = (target_dist - distances[j - 1]) / segment_distance;
                 Eigen::Vector3d interp_state = path[j - 1] + t * (path[j] - path[j - 1]);
                 resampled_path.push_back(interp_state);
                 break;

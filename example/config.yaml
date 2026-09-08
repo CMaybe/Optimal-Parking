@@ -4,26 +4,26 @@ vehicle_width: 1.6
 initial_pose: [-6, 4, 0, 0, 0]
 goal_pose: [0, 0., 0, 0, 0]
 
-trajectory_time: 70
-Ts: 0.1
+trajectory_time: 20
+Ts: 0.2
 
 
-# x and y position, orientation, velocity, and acceleration
-state_lowerbound: [-100.0, -100.0, -3.15, -10, -0.63792]
-state_upperbound: [100.0, 100.0, 3.15, 10, 0.63792]
+# x, y, yaw are unconstrained; only velocity and steering angle are bounded.
+velocity_steer_lowerbound: [-10, -0.63792]
+velocity_steer_upperbound: [10, 0.63792]
 
 # input: acceleration and steering angle
 input_lowerbound: [-1.0, -1.0]
 input_upperbound: [2.0, 2.0]
 
 
-state_weight: [0.0, 0.0, 0.0, 0.0, 0.0]
+state_weight: [0.1, 0.1, 0.1, 0.01, 0.01]
 input_weight: [1.0, 10.0]
 
-n_sqp: 100
-qp_iteration: 1000
-rho_goal: 10000.0
-rho_obs: 10.0
+n_sqp: 30
+qp_iteration: 500
+rho_goal: 200.0
+rho_obs: 20.0
 
 
 obstacles:
@@ -47,7 +47,7 @@ safety_margin: 0.0
 
 
 # RRT* parameters
-max_iterations: 10000
+max_iterations: 2000
 goal_bias: 0.1
 map_x_min: -30.0
 map_x_max: 30.0

@@ -1,23 +1,24 @@
 #pragma once
 
 #include <Eigen/Dense>
+#include <Eigen/Sparse>
 #include <memory>
 #include <vector>
 
 namespace optimal_parking {
 
 struct QPData {
-    Eigen::MatrixXd H;
-    Eigen::VectorXd f;
-    Eigen::MatrixXd A;
+    Eigen::SparseMatrix<double> hessian;
+    Eigen::VectorXd gradient;
+    Eigen::SparseMatrix<double> constraint_matrix;
     Eigen::VectorXd lower_bound;
     Eigen::VectorXd upper_bound;
 };
 
 struct ModelMatrices {
-    Eigen::Matrix<double, 5, 5> Ad;
-    Eigen::Matrix<double, 5, 2> Bd;
-    Eigen::Matrix<double, 5, 1> gd;
+    Eigen::Matrix<double, 5, 5> discrete_a;
+    Eigen::Matrix<double, 5, 2> discrete_b;
+    Eigen::Matrix<double, 5, 1> discrete_g;
 };
 
 struct TrajectoryData {
@@ -41,8 +42,7 @@ struct Obstacle {
 struct Node {
     Eigen::Vector3d state;
     std::shared_ptr<Node> parent;
-    std::vector<std::shared_ptr<Node>> children;
     double cost;
 };
 
-};  // namespace optimal_parking
+}  // namespace optimal_parking

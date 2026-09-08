@@ -1,32 +1,27 @@
 #include "optimal_parking/system/system_model.hpp"
 
-#include <iostream>
-#include <unsupported/Eigen/MatrixFunctions>
-#include <yaml-cpp/yaml.h>
+#include <cmath>
+
+#include "optimal_parking/config.hpp"
 namespace optimal_parking {
 SystemModel::SystemModel(const std::string& path) {
-    YAML::Node config = YAML::LoadFile(path);
-
-    vehicle_length_ = config["vehicle_length"].as<double>();
-    vehicle_width_ = config["vehicle_width"].as<double>();
+    const PlannerConfig config = load_planner_config(path);
+    vehicle_length_ = config.vehicle_length;
+    vehicle_width_ = config.vehicle_width;
 }
-SystemModel::SystemModel(const double& vehicle_length, const double& vehicle_width)
+SystemModel::SystemModel(double vehicle_length, double vehicle_width)
     : vehicle_length_(vehicle_length), vehicle_width_(vehicle_width) {}
-SystemModel::SystemModel(const SystemModel& other)
-    : vehicle_length_(other.vehicle_length_), vehicle_width_(other.vehicle_width_) {}
-
 void SystemModel::initialize(const std::string& path) {
-    YAML::Node config = YAML::LoadFile(path);
-
-    vehicle_length_ = config["vehicle_length"].as<double>();
-    vehicle_width_ = config["vehicle_width"].as<double>();
+    const PlannerConfig config = load_planner_config(path);
+    vehicle_length_ = config.vehicle_length;
+    vehicle_width_ = config.vehicle_width;
 }
-void SystemModel::initialize(const double& vehicle_length, const double& vehicle_width) {
+void SystemModel::initialize(double vehicle_length, double vehicle_width) {
     vehicle_length_ = vehicle_length;
     vehicle_width_ = vehicle_width;
 }
 
-Eigen::Vector<double, 5> SystemModel::f(const SystemState& state, const SystemInput& input) const {
+Eigen::Vector<double, 5> SystemModel::evaluate_dynamics(const SystemState& state, const SystemInput& input) const {
     Eigen::Vector<double, 5> state_dot;
     // clang-format off
     state_dot <<   state.velocity() * std::cos(state.yaw()), 
@@ -38,42 +33,43 @@ Eigen::Vector<double, 5> SystemModel::f(const SystemState& state, const SystemIn
     return state_dot;
 }
 
-ModelMatrices SystemModel::getSystemJacobian(const SystemState& state, const SystemInput& input, const double& dt) const {
-    Eigen::Vector<double, 5> state_dot = f(state, input);
+ModelMatrices SystemModel::compute_discrete_linearization(const SystemState& state,
+                                                          const SystemInput& input,
+                                                          const double time_step) const {
+    Eigen::Vector<double, 5> state_dot = evaluate_dynamics(state, input);
 
-    Eigen::Matrix<double, 5, 5> Ac, Ad;
-    Eigen::Matrix<double, 5, 2> Bc, Bd;
-    Eigen::Matrix<double, 5, 1> gc, gd;
+    Eigen::Matrix<double, 5, 5> continuous_a;
+    Eigen::Matrix<double, 5, 5> discrete_a;
+    Eigen::Matrix<double, 5, 2> continuous_b;
+    Eigen::Matrix<double, 5, 2> discrete_b;
+    Eigen::Matrix<double, 5, 1> continuous_g;
+    Eigen::Matrix<double, 5, 1> discrete_g;
 
     // clang-format off
-    Ac <<  0, 0, -state.velocity() * std::sin(state.yaw()),                     std::cos(state.yaw()),                                                                                        0, 
-           0, 0,  state.velocity() * std::cos(state.yaw()),                     std::sin(state.yaw()),                                                                                        0, 
+    continuous_a <<  0, 0, -state.velocity() * std::sin(state.yaw()),                     std::cos(state.yaw()),                                                                                        0,
+           0, 0,  state.velocity() * std::cos(state.yaw()),                     std::sin(state.yaw()),                                                                                        0,
            0, 0,                                         0, std::tan(state.delta()) / vehicle_length_, state.velocity() / (vehicle_length_ * std::cos(state.delta()) * std::cos(state.delta())),
-           0, 0,                                         0,                                         0,                                                                                        0, 
+           0, 0,                                         0,                                         0,                                                                                        0,
            0, 0,                                         0,                                         0,                                                                                        0;
-    // clang-format on	
+    // clang-format on
 
     // clang-format off
-    Bc <<  0, 0,
+    continuous_b <<  0, 0,
            0, 0,
            0, 0,
            1, 0,
            0, 1;
     // clang-format on
-    gc = state_dot - Ac * state - Bc * input;
+    continuous_g = state_dot - continuous_a * state - continuous_b * input;
 
-    Eigen::Matrix<double, 5 + 2 + 1, 5 + 2 + 1> continuous_system_matrix = Eigen::Matrix<double, 5 + 2 + 1, 5 + 2 + 1>::Zero();
+    const Eigen::Matrix<double, 5, 5> continuous_a_dt = continuous_a * time_step;
+    const Eigen::Matrix<double, 5, 5> identity = Eigen::Matrix<double, 5, 5>::Identity();
+    const Eigen::Matrix<double, 5, 5> identity_plus_half_a_dt = identity + 0.5 * continuous_a_dt;
 
-    continuous_system_matrix.block<5, 5>(0, 0) = Ac;
-    continuous_system_matrix.block<5, 2>(0, 5) = Bc;
-    continuous_system_matrix.block<5, 1>(0, 5 + 2) = gc;
-    continuous_system_matrix = continuous_system_matrix * dt;
-    const Eigen::Matrix<double, 5 + 2 + 1, 5 + 2 + 1> discrete_system_matrix = continuous_system_matrix.exp();
+    discrete_a = identity + continuous_a_dt + 0.5 * (continuous_a_dt * continuous_a_dt);
+    discrete_b = identity_plus_half_a_dt * (continuous_b * time_step);
+    discrete_g = identity_plus_half_a_dt * (continuous_g * time_step);
 
-    Ad = discrete_system_matrix.block<5, 5>(0, 0);
-    Bd = discrete_system_matrix.block<5, 2>(0, 5);
-    gd = discrete_system_matrix.block<5, 1>(0, 5 + 2);
-
-    return ModelMatrices{Ad, Bd, gd};
+    return ModelMatrices{discrete_a, discrete_b, discrete_g};
 }
 }  // namespace optimal_parking
