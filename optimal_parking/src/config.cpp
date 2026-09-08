@@ -35,8 +35,8 @@ PlannerConfig load_planner_config(const std::string& path) {
     config.vehicle_width = node["vehicle_width"].as<double>();
     config.trajectory_time = node["trajectory_time"].as<double>();
     config.ts = node["Ts"].as<double>();
-    config.state_lower_bound = read_vector<5>(node["state_lowerbound"]);
-    config.state_upper_bound = read_vector<5>(node["state_upperbound"]);
+    config.velocity_steer_lower_bound = read_vector<2>(node["velocity_steer_lowerbound"]);
+    config.velocity_steer_upper_bound = read_vector<2>(node["velocity_steer_upperbound"]);
     config.input_lower_bound = read_vector<2>(node["input_lowerbound"]);
     config.input_upper_bound = read_vector<2>(node["input_upperbound"]);
     config.state_weight = read_vector<5>(node["state_weight"]);

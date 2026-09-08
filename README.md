@@ -1,116 +1,154 @@
 # Optimal Parking
-[![build-test](https://github.com/CMaybe/Optimal-Parking/actions/workflows/optimal-parking.yaml/badge.svg)](https://github.com/CMaybe/Optimal-Parking/actions/workflows/optimal-parking.yaml)
 
-Optimal Parking is a project designed to optimize vehicle trajectories for parking scenarios using advanced mathematical models and optimization techniques. Visualization is handled via **matplotlibcpp**
+[![Build and test](https://github.com/CMaybe/Optimal-Parking/actions/workflows/optimal-parking.yaml/badge.svg)](https://github.com/CMaybe/Optimal-Parking/actions/workflows/optimal-parking.yaml)
+
+Optimal Parking generates and visualizes vehicle trajectories for parking
+scenarios using a kinematic vehicle model and numerical optimization. The
+planner uses RRT* to generate an initial geometric path and an SQP-like
+sequence of quadratic programs (QPs) to refine it. Visualization is provided
+by `matplotlibcpp`.
 
 ## Features
-- **Trajectory Optimization**: Implements Sequential Quadratic Programming (SQP) for trajectory planning.
-- **System Modeling**: Models vehicle dynamics using state-space representations.
-- **Obstacle Avoidance**: Incorporates static obstacle avoidance using geometric constraints.
-- **Path Planning with RRT***: Uses the RRT* algorithm to generate an initial feasible trajectory.
-- **Visualization**: Real-time visualization of vehicle trajectories and obstacles using `matplotlibcpp`.
-- **Configurable Parameters**: Easily modify parameters such as vehicle dimensions, trajectory time, and optimization weights via a `config.yaml` file.
-- **Devcontainer Support**: Quickly set up a development environment using Docker and Visual Studio Code.
----
+
+- **Trajectory optimization**: Refines a trajectory through iterative QP
+  solves with OSQP.
+- **Vehicle modeling**: Represents position, heading, velocity, and steering
+  angle with a five-state kinematic bicycle model.
+- **Obstacle avoidance**: Applies locally linearized geometric obstacle
+  constraints with configurable safety margins.
+- **RRT* path planning**: Generates an initial geometric path before QP
+  refinement.
+- **Visualization**: Plots trajectories, vehicle states, and obstacles with
+  `matplotlibcpp`.
+- **Configurable parameters**: Loads vehicle dimensions, bounds, timing,
+  optimization weights, and planner settings from a YAML file.
+- **Dev Container support**: Provides a Docker-based development environment
+  for Visual Studio Code.
 
 ## Dependencies
-To build and run this project, the following dependencies are required:
 
-- **C++ Compiler**: A C++20 compatible compiler (e.g., `g++`, `clang`).
-- **CMake**: Version 3.27.4 or higher.
-- **Eigen**: Version 3.4.0 for matrix operations ([Eigen Official Site](https://eigen.tuxfamily.org/)).
-- **yaml-cpp**: For parsing YAML configuration files.
-- **OsqpEigen**: Version 0.10.0 for quadratic programming ([OsqpEigen GitHub](https://github.com/robotology/osqp-eigen)).
-- **matplotlibcpp**: For real-time visualization ([matplotlibcpp GitHub](https://github.com/lava/matplotlib-cpp)).
-- **Python3**: For `matplotlibcpp` and `numpy` integration.
+The project requires:
+
+- A C++20-compatible compiler, such as `g++` or `clang`.
+- CMake 3.27.4 or later.
+- Eigen 3.4 or later for matrix operations
+  ([Eigen](https://eigen.tuxfamily.org/)).
+- `yaml-cpp` for YAML configuration parsing.
+- `OsqpEigen` 0.10.0 for QP solving
+  ([OsqpEigen](https://github.com/robotology/osqp-eigen)).
+- Python 3, including NumPy, for `matplotlibcpp` integration.
+- `matplotlibcpp` for visualization
+  ([matplotlibcpp](https://github.com/lava/matplotlib-cpp)).
+
+The provided Dockerfile and Dev Container configuration install the required
+packages in the development container.
 
 ## Documentation
 
-For detailed information about the project, including system architecture, mathematical models, and configuration examples, please refer to the PDF files in the `docs` folder:
+Detailed descriptions of the system model, optimization problem, and planner
+are available in the `docs` directory:
 
-- [English Documentation](docs/en.pdf)
-- [Korean Documentation](docs/kor.pdf)
+- [English Markdown documentation](docs/README.md)
+- [Korean Markdown documentation](docs/README.ko.md)
+- [English PDF documentation](docs/en.pdf)
+- [Korean PDF documentation](docs/kor.pdf)
 
-## Getting Started on Devcontainer (Recommended)
-This repository is configured with a `devcontainer` for Visual Studio Code, allowing you to quickly set up and use the development environment using Docker.
+## Getting Started with the Dev Container
 
-### 1. Clone the Repository
+The repository includes a Dev Container configuration for Visual Studio Code.
+Using it is the recommended way to prepare the development environment.
+
+### 1. Clone the repository
+
 ```bash
 git clone https://github.com/CMaybe/Optimal-Parking.git
 cd Optimal-Parking
 code .
 ```
-### 2. Open in VSCode
 
-Open the cloned repository in Visual Studio Code. VSCode will detect the devcontainer configuration and prompt you to reopen the folder in the container.
+### 2. Open the repository in Visual Studio Code
 
-### 3. Reopen in Container
+Open the cloned repository in Visual Studio Code. VS Code detects the Dev
+Container configuration and prompts you to reopen the folder in the container.
 
-Follow the prompt to reopen the repository in the Docker container. VSCode will build and start the container as defined in the .devcontainer directory, setting up the development environment according to the configuratio.
+### 3. Reopen in the container
 
-#### (Option: Access the Container Directly)
-If you prefer to access the container directly, you can use the following command:
+Follow the prompt to reopen the repository in the container. VS Code builds and
+starts the container according to the configuration in `.devcontainer`.
+
+#### Optional: access the container directly
+
+If you need to access the running container from a terminal, use:
 
 ```bash
 xhost +local:docker
 docker exec -it dev-optimal-parking /bin/bash
-``` 
+```
 
-We also prepared Docker image [dev-optimal-parking](https://github.com/users/CMaybe/packages/container/package/dev-optimal-parking) for the developers. 
-``` bash
+A prebuilt development image is also available:
+
+```bash
 docker pull ghcr.io/cmaybe/dev-optimal-parking:latest
 ```
 
+See the [development container package](https://github.com/users/CMaybe/packages/container/package/dev-optimal-parking)
+for more information.
 
+## Build and Install the Library
 
+When using the provided Dockerfile or Dev Container, the required dependencies
+are installed automatically.
 
-### Build and install `optimal parking`
-If you are using the provided Dockerfile or Devcontainer, all dependencies will be installed automatically.
+### Build
 
-**Build**  
 ```bash
-mkdir optimal_parking/build && cd optimal_parking/build
-cmake -DCMAKE_BUILD_TYPE=Release ..
-make -j
-```
-**Install**
-```bash
-sudo make install # default prefix is /usr/local
+cmake -S optimal_parking -B optimal_parking/build \
+  -DCMAKE_BUILD_TYPE=Release
+cmake --build optimal_parking/build --parallel
 ```
 
-**Run clang-tidy**
+### Install
+
+```bash
+sudo cmake --install optimal_parking/build
+```
+
+The default install prefix is `/usr/local`.
+
+### Run clang-tidy
+
 ```bash
 cmake -S optimal_parking -B optimal_parking/build \
   -DCMAKE_BUILD_TYPE=Debug \
   -DOPTIMAL_PARKING_ENABLE_CLANG_TIDY=ON
-cmake --build optimal_parking/build
+cmake --build optimal_parking/build --parallel
 ```
 
-The clang-tidy checks are configured in `.clang-tidy` and run automatically for
-the library sources when `OPTIMAL_PARKING_ENABLE_CLANG_TIDY` is enabled.
+The `.clang-tidy` configuration is applied automatically to library sources
+when `OPTIMAL_PARKING_ENABLE_CLANG_TIDY` is enabled.
 
 ## Configuration
-The project uses a `config.yaml` file for parameter configuration. Below is an example configuration
+
+The planner reads parameters from a YAML file. The following example shows the
+required keys and their meanings:
 
 ```yaml
 vehicle_length: 2.8
 vehicle_width: 1.6
 
 initial_pose: [-6, 4, 0, 0, 0]
-goal_pose: [0, 0., 0, 0, 0]
+goal_pose: [0, 0, 0, 0, 0]
 
 trajectory_time: 70
 Ts: 0.1
 
+# velocity and steering angle bounds (x, y, yaw are left unconstrained)
+velocity_steer_lowerbound: [-10.0, -0.63792]
+velocity_steer_upperbound: [10.0, 0.63792]
 
-# x and y position, orientation, velocity, and acceleration
-state_lowerbound: [-100.0, -100.0, -3.15, -10, -0.63792]
-state_upperbound: [100.0, 100.0, 3.15, 10, 0.63792]
-
-# input: acceleration and steering angle
+# acceleration and steering-rate input
 input_lowerbound: [-1.0, -1.0]
 input_upperbound: [2.0, 2.0]
-
 
 state_weight: [0.0, 0.0, 0.0, 0.0, 0.0]
 input_weight: [1.0, 10.0]
@@ -120,9 +158,8 @@ qp_iteration: 1000
 rho_goal: 10000.0
 rho_obs: 10.0
 
-
 obstacles:
-  - center: [-6.0 ,0.0]
+  - center: [-6.0, 0.0]
     length: 4.0
     width: 2.0
     yaw: 0.0
@@ -138,8 +175,8 @@ obstacles:
     length: 10.0
     width: 3.0
     yaw: 0.0
-safety_margin: 0.0
 
+safety_margin: 0.0
 
 # RRT* parameters
 max_iterations: 10000
@@ -148,35 +185,36 @@ map_x_min: -30.0
 map_x_max: 30.0
 map_y_min: -30.0
 map_y_max: 30.0
-goal_radius : 0.1
-step_dist : 0.9
-rewire_radius : 1.5
+goal_radius: 0.1
+step_dist: 0.9
+rewire_radius: 1.5
 ```
 
+## Example
 
-## Examples
-An example for visualize trajecotry is included in the repository. You can find it in the `example` directory:
+The `example` directory contains a trajectory visualization example. Build it
+after installing the `optimal_parking` library:
+
 ```bash
-cd example
-mkdir build && cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
-make -j
-# run
-./to_example 
+cmake -S example -B example/build \
+  -DCMAKE_BUILD_TYPE=Release
+cmake --build example/build --parallel
+cd example/build
+./to_example
 ```
-#### Result
-![demo1](docs/assets/demo/demo1.gif)
-![demo2](docs/assets/demo/demo2.gif)
-![demo3](docs/assets/demo/demo3.gif)
 
-## WIP ...
+Example results:
+
+![Demo 1](docs/assets/demo/demo1.gif)
+![Demo 2](docs/assets/demo/demo2.gif)
+![Demo 3](docs/assets/demo/demo3.gif)
+
+## Work in Progress
+
+The project is still under active development.
 
 ## TODO
--  Enhance technical documentation:
-  - Add detailed explanations for the mathematical models used.
-  - Include diagrams for system architecture and control flow.
-- Set up Continuous Integration (CI):
-  - Add GitHub Actions for automated builds and tests.
-  - Include static analysis tools (e.g., clang-tidy, cppcheck).
-  - Run unit tests using Google Test.
-- Implement a benchmarking tool to evaluate performance under different scenarios.
+
+- Expand the technical documentation with system architecture and control-flow diagrams.
+- Extend continuous integration with automated builds, static analysis, and unit tests.
+- Add benchmarking tools for comparing planner performance across scenarios.

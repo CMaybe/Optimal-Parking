@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <limits>
 
 #include "optimal_parking/config.hpp"
 #include "optimal_parking/qp_solver.hpp"
@@ -15,8 +16,10 @@ TrajectoryOptimizer::TrajectoryOptimizer(const std::string& config_path) {
 
     trajectory_time_ = config.trajectory_time;
     sample_time_ = config.ts;
-    state_lower_bound_ = config.state_lower_bound;
-    state_upper_bound_ = config.state_upper_bound;
+    state_lower_bound_.setConstant(-std::numeric_limits<double>::infinity());
+    state_upper_bound_.setConstant(std::numeric_limits<double>::infinity());
+    state_lower_bound_.tail<2>() = config.velocity_steer_lower_bound;
+    state_upper_bound_.tail<2>() = config.velocity_steer_upper_bound;
     input_lower_bound_ = config.input_lower_bound;
     input_upper_bound_ = config.input_upper_bound;
     max_sqp_iterations_ = config.sqp_iterations;
@@ -43,8 +46,6 @@ TrajectoryOptimizer::TrajectoryOptimizer(const std::string& config_path) {
     input_weight_matrix_ = config.input_weight.asDiagonal();
 
     prediction_horizon_ = static_cast<Eigen::Index>(std::ceil(trajectory_time_ / sample_time_));
-    state_dim_ = 5;
-    input_dim_ = 2;
 
     update_problem_dimensions();
 
@@ -263,6 +264,9 @@ QPData TrajectoryOptimizer::setup_qp(const SystemModel& system_model,
               Eigen::MatrixXd::Identity(state_dim_, state_dim_));
     equality_vector.segment(num_equality_constraints_ - state_dim_, state_dim_) =
         goal_state_ - optimal_solution_.segment(num_state_variables_ - state_dim_, state_dim_);
+    equality_vector(num_equality_constraints_ - state_dim_ + 2) =
+        std::atan2(std::sin(equality_vector(num_equality_constraints_ - state_dim_ + 2)),
+                   std::cos(equality_vector(num_equality_constraints_ - state_dim_ + 2)));
 
     // Inequality constraints (state/input bounds)
     for (int time_step = 0; time_step <= prediction_horizon_; ++time_step) {

@@ -14,8 +14,9 @@ struct PlannerConfig {
     double trajectory_time;
     double ts;
 
-    Eigen::Vector<double, 5> state_lower_bound;
-    Eigen::Vector<double, 5> state_upper_bound;
+    // Only velocity and steering angle are physically bounded; x, y, yaw are left unconstrained.
+    Eigen::Vector<double, 2> velocity_steer_lower_bound;
+    Eigen::Vector<double, 2> velocity_steer_upper_bound;
     Eigen::Vector<double, 2> input_lower_bound;
     Eigen::Vector<double, 2> input_upper_bound;
     Eigen::Vector<double, 5> state_weight;
