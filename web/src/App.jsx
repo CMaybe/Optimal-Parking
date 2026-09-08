@@ -181,6 +181,38 @@ function PoseControls({ label, color, pose, onChange }) {
   );
 }
 
+function ObstaclesPanel({ obstacles, onChange, onAdd, onRemove }) {
+  return (
+    <Panel title="Obstacles">
+      {obstacles.map((obstacle, index) => (
+        <div key={index} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+          <span style={{ width: 16, fontSize: 12, color: "#c9d3e0" }}>{index + 1}</span>
+          {["x", "y", "length", "width"].map((field) => (
+            <input
+              key={field}
+              type="number"
+              step="0.1"
+              value={obstacle[field]}
+              onChange={(e) => {
+                const value = parseFloat(e.target.value) || 0;
+                onChange(obstacles.map((o, i) => (i === index ? { ...o, [field]: value } : o)));
+              }}
+              title={field}
+              style={{ width: 44 }}
+            />
+          ))}
+          <button onClick={() => onRemove(index)} title="remove" style={{ padding: "2px 6px" }}>
+            ×
+          </button>
+        </div>
+      ))}
+      <button onClick={onAdd} style={{ width: "100%", marginTop: 4 }}>
+        + Add obstacle
+      </button>
+    </Panel>
+  );
+}
+
 function ParameterControls({ params, onChange }) {
   return (
     <Panel title="Planner parameters">
@@ -410,6 +442,22 @@ export default function App() {
 
   const handleMouseUp = () => setDragTarget(null);
 
+  const handleAddObstacle = () => {
+    setObstacles((current) => [...current, { x: 0, y: 0, length: 3, width: 2, yaw: 0 }]);
+  };
+
+  const handleRemoveObstacle = (index) => {
+    setObstacles((current) => current.filter((_, i) => i !== index));
+  };
+
+  const handleDoubleClick = (event) => {
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const [worldX, worldY] = canvasToWorld(event.clientX - rect.left, event.clientY - rect.top, canvas.width, canvas.height);
+    const index = hitTestObstacle(worldX, worldY);
+    if (index >= 0) handleRemoveObstacle(index);
+  };
+
   return (
     <div style={{ position: "relative", width: "100vw", height: "100vh", overflow: "hidden" }}>
       <canvas
@@ -421,12 +469,13 @@ export default function App() {
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onDoubleClick={handleDoubleClick}
       />
 
       <div style={{ position: "absolute", top: 16, left: 16, width: 280 }}>
         <Panel title="Optimal Parking">
           <p style={{ fontSize: 12, color: "#c9d3e0", margin: "4px 0 8px" }}>
-            Drag car bodies to move, drag the white dot to rotate. Drag grey rectangles to move obstacles.
+            Drag car bodies to move, drag the white dot to rotate. Drag obstacles to move, double-click to delete.
           </p>
           <button onClick={handlePlan} disabled={status !== "ready"} style={{ width: "100%", padding: 8 }}>
             Plan trajectory
@@ -434,6 +483,7 @@ export default function App() {
         </Panel>
         <PoseControls label="Initial pose" color="#63d471" pose={initialPose} onChange={setInitialPose} />
         <PoseControls label="Goal pose" color="#ff5c8a" pose={goalPose} onChange={setGoalPose} />
+        <ObstaclesPanel obstacles={obstacles} onChange={setObstacles} onAdd={handleAddObstacle} onRemove={handleRemoveObstacle} />
         <ParameterControls params={params} onChange={setParams} />
       </div>
 
