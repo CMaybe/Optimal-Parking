@@ -2,6 +2,7 @@
 #define TRAJECTORY_OPTIMIZER_HPP
 
 #include <Eigen/Dense>
+#include <cmath>
 #include <vector>
 
 #include "optimal_parking/rrt_star.hpp"
@@ -18,6 +19,28 @@ public:
     void set_goal_pose(const Eigen::Vector<double, 5>& goal_pose);
     void set_initial_pose(const Eigen::Vector<double, 5>& initial_pose);
     void set_obstacles(const std::vector<Obstacle>& obstacles);
+    void set_safety_margin(double safety_margin) { safety_margin_ = safety_margin; }
+    void set_goal_penalty_weight(double goal_penalty_weight) { goal_penalty_weight_ = goal_penalty_weight; }
+    void set_obstacle_penalty_weight(double obstacle_penalty_weight) { obstacle_penalty_weight_ = obstacle_penalty_weight; }
+    void set_max_sqp_iterations(int max_sqp_iterations) { max_sqp_iterations_ = max_sqp_iterations; }
+    void set_max_qp_iterations(int max_qp_iterations) { max_qp_iterations_ = max_qp_iterations; }
+    void set_state_weight(const Eigen::Vector<double, 5>& state_weight) { state_weight_matrix_ = state_weight.asDiagonal(); }
+    void set_input_weight(const Eigen::Vector<double, 2>& input_weight) { input_weight_matrix_ = input_weight.asDiagonal(); }
+    void set_input_bounds(const Eigen::Vector<double, 2>& lower, const Eigen::Vector<double, 2>& upper) {
+        input_lower_bound_ = lower;
+        input_upper_bound_ = upper;
+    }
+    void set_velocity_steer_bounds(const Eigen::Vector<double, 2>& lower, const Eigen::Vector<double, 2>& upper) {
+        state_lower_bound_.tail<2>() = lower;
+        state_upper_bound_.tail<2>() = upper;
+    }
+    void set_horizon(double trajectory_time, double sample_time) {
+        trajectory_time_ = trajectory_time;
+        sample_time_ = sample_time;
+        prediction_horizon_ = static_cast<Eigen::Index>(std::ceil(trajectory_time_ / sample_time_));
+        update_problem_dimensions();
+        optimal_solution_.setZero(num_decision_variables_);
+    }
     void run_sqp(const SystemModel& system_model);
     void update_trajectory_data();
     QPData setup_qp(const SystemModel& system_model,
