@@ -221,7 +221,7 @@ function Panel({ title, children, style }) {
 function SliderRow({ label, value, min, max, step, onChange, format }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-      <span style={{ width: 44, fontSize: 12, color: "#c9d3e0" }}>{label}</span>
+      <span style={{ width: 62, flexShrink: 0, whiteSpace: "nowrap", fontSize: 11, color: "#c9d3e0" }}>{label}</span>
       <input
         type="range"
         min={min}
@@ -229,9 +229,9 @@ function SliderRow({ label, value, min, max, step, onChange, format }) {
         step={step}
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
-        style={{ flex: 1 }}
+        style={{ flex: 1, minWidth: 0 }}
       />
-      <span style={{ width: 56, textAlign: "right", fontSize: 12, fontFamily: "monospace" }}>
+      <span style={{ width: 60, flexShrink: 0, textAlign: "right", fontSize: 11, fontFamily: "monospace" }}>
         {format ? format(value) : value}
       </span>
     </div>
@@ -242,7 +242,7 @@ function SliderRow({ label, value, min, max, step, onChange, format }) {
 function VectorRow({ label, labels, values, step = 0.01, onChange }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
-      <span style={{ width: 44, fontSize: 12, color: "#c9d3e0" }}>{label}</span>
+      <span style={{ width: 62, flexShrink: 0, whiteSpace: "nowrap", fontSize: 11, color: "#c9d3e0" }}>{label}</span>
       {values.map((value, i) => (
         <input
           key={i}
@@ -255,7 +255,7 @@ function VectorRow({ label, labels, values, step = 0.01, onChange }) {
             next[i] = parseFloat(e.target.value) || 0;
             onChange(next);
           }}
-          style={{ width: 46 }}
+          style={{ width: 0, flex: 1, minWidth: 36, fontSize: 11 }}
         />
       ))}
     </div>
@@ -297,7 +297,7 @@ function ObstaclesPanel({ obstacles, onChange, onAdd, onRemove }) {
                 onChange(obstacles.map((o, i) => (i === index ? { ...o, [field]: value } : o)));
               }}
               title={field}
-              style={{ width: 44 }}
+              style={{ width: 0, flex: 1, minWidth: 34, fontSize: 11 }}
             />
           ))}
           <button onClick={() => onRemove(index)} title="remove" style={{ padding: "2px 6px" }}>
@@ -473,6 +473,7 @@ export default function App() {
   const [playback, setPlayback] = useState({ playing: false, time: 0 });
   const [view, setView] = useState(DEFAULT_VIEW);
   const [canvasSize, setCanvasSize] = useState({ width: window.innerWidth, height: window.innerHeight });
+  const [sidebarWidth, setSidebarWidth] = useState(320);
 
   useEffect(() => {
     const handleResize = () => setCanvasSize({ width: window.innerWidth, height: window.innerHeight });
@@ -733,6 +734,24 @@ export default function App() {
     if (index >= 0) handleRemoveObstacle(index);
   };
 
+  // Drag the sidebar's right edge to resize it; tracked with document-level
+  // listeners since the drag can move outside the handle/sidebar itself.
+  const handleSidebarResizeStart = (event) => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = sidebarWidth;
+    const handleMove = (moveEvent) => {
+      const next = startWidth + (moveEvent.clientX - startX);
+      setSidebarWidth(Math.min(520, Math.max(220, next)));
+    };
+    const handleUp = () => {
+      document.removeEventListener("mousemove", handleMove);
+      document.removeEventListener("mouseup", handleUp);
+    };
+    document.addEventListener("mousemove", handleMove);
+    document.addEventListener("mouseup", handleUp);
+  };
+
   return (
     <div style={{ position: "relative", width: "100vw", height: "100vh", overflow: "hidden" }}>
       <canvas
@@ -753,7 +772,17 @@ export default function App() {
         <button onClick={() => handleZoomButton(1.3)}>+</button>
       </div>
 
-      <div style={{ position: "absolute", top: 16, left: 16, width: 280, maxHeight: "calc(100vh - 32px)", overflowY: "auto" }}>
+      <div
+        style={{
+          position: "absolute",
+          top: 16,
+          left: 16,
+          width: sidebarWidth,
+          maxHeight: "calc(100vh - 32px)",
+          overflowY: "auto",
+          overflowX: "hidden"
+        }}
+      >
         <Panel title="Optimal Parking">
           <p style={{ fontSize: 12, color: "#c9d3e0", margin: "4px 0 8px" }}>
             Click a car or obstacle to select it, then drag its dot (rotate) or squares (resize). Drag empty space to
@@ -768,6 +797,19 @@ export default function App() {
         <ObstaclesPanel obstacles={obstacles} onChange={setObstacles} onAdd={handleAddObstacle} onRemove={handleRemoveObstacle} />
         <ParameterControls params={params} onChange={setParams} />
       </div>
+
+      <div
+        onMouseDown={handleSidebarResizeStart}
+        title="Drag to resize"
+        style={{
+          position: "absolute",
+          top: 16,
+          left: sidebarWidth + 16,
+          width: 6,
+          height: "calc(100vh - 32px)",
+          cursor: "ew-resize"
+        }}
+      />
 
       <div style={{ position: "absolute", top: 16, right: 16 }}>
         <ReadoutPanel
