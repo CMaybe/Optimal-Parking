@@ -199,6 +199,41 @@ function drawScene(ctx, canvas, state) {
 // UI subcomponents
 // ---------------------------------------------------------------------------
 
+function HeaderBar() {
+	return (
+		<header
+			style={{
+				position: "absolute",
+				top: 0,
+				left: 0,
+				right: 0,
+				height: 64,
+				zIndex: 20,
+				display: "flex",
+				alignItems: "center",
+				justifyContent: "space-between",
+				padding: "0 20px 0 18px",
+				background: "rgba(9, 12, 17, 0.72)",
+				borderBottom: "1px solid #1d2531",
+				backdropFilter: "blur(10px)"
+			}}
+		>
+			<div style={{ display: "flex", alignItems: "center" }}>
+				<div style={{ fontSize: 16, fontWeight: 700, color: "#edf4ff", letterSpacing: "0.02em" }}>Optimal Parking</div>
+			</div>
+
+			<nav style={{ display: "flex", alignItems: "center", gap: 18, fontSize: 12, fontWeight: 600 }}>
+				<a href="https://github.com/CMaybe/Optimal-Parking" target="_blank" rel="noreferrer" style={{ color: "#dfeafc", textDecoration: "none" }}>
+					GitHub
+				</a>
+				<a href="https://cmaybe.github.io/notes/optimal-parking" target="_blank" rel="noreferrer" style={{ color: "#dfeafc", textDecoration: "none" }}>
+					Docs
+				</a>
+			</nav>
+		</header>
+	);
+}
+
 function Panel({ title, children, style }) {
 	return (
 		<div
@@ -497,9 +532,14 @@ export default function App() {
 	const [view, setView] = useState(DEFAULT_VIEW);
 	const [canvasSize, setCanvasSize] = useState({ width: window.innerWidth, height: window.innerHeight });
 	const [sidebarWidth, setSidebarWidth] = useState(320);
+	const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
 	useEffect(() => {
-		const handleResize = () => setCanvasSize({ width: window.innerWidth, height: window.innerHeight });
+		const handleResize = () => {
+			const mobile = window.innerWidth < 768;
+			setIsMobile(mobile);
+			setCanvasSize({ width: window.innerWidth, height: window.innerHeight });
+		};
 		window.addEventListener("resize", handleResize);
 		return () => window.removeEventListener("resize", handleResize);
 	}, []);
@@ -761,6 +801,7 @@ export default function App() {
 	// Drag the sidebar's right edge to resize it; tracked with document-level
 	// listeners since the drag can move outside the handle/sidebar itself.
 	const handleSidebarResizeStart = (event) => {
+		if (isMobile) return;
 		event.preventDefault();
 		const startX = event.clientX;
 		const startWidth = sidebarWidth;
@@ -776,8 +817,12 @@ export default function App() {
 		document.addEventListener("mouseup", handleUp);
 	};
 
+	const effectiveSidebarWidth = isMobile ? Math.min(260, Math.max(200, canvasSize.width - 24)) : sidebarWidth;
+	const topInset = 72;
+
 	return (
 		<div style={{ position: "relative", width: "100vw", height: "100vh", overflow: "hidden" }}>
+			<HeaderBar />
 			<canvas
 				ref={canvasRef}
 				width={canvasSize.width}
@@ -799,15 +844,23 @@ export default function App() {
 			<div
 				style={{
 					position: "absolute",
-					top: 16,
-					left: 16,
-					width: sidebarWidth,
-					maxHeight: "calc(100vh - 32px)",
+					top: topInset,
+					left: isMobile ? 12 : 16,
+					width: effectiveSidebarWidth,
+					maxHeight: isMobile ? "calc(100vh - 145px)" : "calc(100vh - 88px)",
 					overflowY: "auto",
 					overflowX: "hidden"
 				}}
 			>
 				<Panel title="Optimal Parking">
+					<a
+						href="https://github.com/CMaybe/Optimal-Parking"
+						target="_blank"
+						rel="noreferrer"
+						style={{ display: "inline-block", marginBottom: 8, color: "#4ea1ff", fontSize: 11 }}
+					>
+						View on GitHub
+					</a>
 					<p style={{ fontSize: 12, color: "#c9d3e0", margin: "4px 0 8px" }}>
 						Click a car or obstacle to select it, then drag its dot (rotate) or squares (resize). Drag empty space to
 						pan, scroll to zoom, double-click an obstacle to delete it.
@@ -822,20 +875,31 @@ export default function App() {
 				<ParameterControls params={params} onChange={setParams} />
 			</div>
 
+			{!isMobile && (
+				<div
+					onMouseDown={handleSidebarResizeStart}
+					title="Drag to resize"
+					style={{
+						position: "absolute",
+						top: topInset,
+						left: sidebarWidth + 16,
+						width: 6,
+						height: "calc(100vh - 88px)",
+						cursor: "ew-resize"
+					}}
+				/>
+			)}
+
 			<div
-				onMouseDown={handleSidebarResizeStart}
-				title="Drag to resize"
 				style={{
 					position: "absolute",
-					top: 16,
-					left: sidebarWidth + 16,
-					width: 6,
-					height: "calc(100vh - 32px)",
-					cursor: "ew-resize"
+					top: topInset,
+					right: isMobile ? 12 : 16,
+					left: isMobile ? 12 : undefined,
+					width: isMobile ? "calc(100vw - 24px)" : undefined,
+					maxWidth: isMobile ? 280 : undefined
 				}}
-			/>
-
-			<div style={{ position: "absolute", top: 16, right: 16 }}>
+			>
 				<ReadoutPanel
 					status={status}
 					log={log}

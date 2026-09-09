@@ -3,6 +3,8 @@
 [![Build and test](https://github.com/CMaybe/Optimal-Parking/actions/workflows/optimal-parking.yaml/badge.svg)](https://github.com/CMaybe/Optimal-Parking/actions/workflows/optimal-parking.yaml)
 [![Deploy Pages](https://github.com/CMaybe/Optimal-Parking/actions/workflows/deploy-pages.yaml/badge.svg)](https://github.com/CMaybe/Optimal-Parking/actions/workflows/deploy-pages.yaml)
 
+GitHub repository: [CMaybe/Optimal-Parking](https://github.com/CMaybe/Optimal-Parking)
+
 Optimal Parking generates and visualizes vehicle trajectories for parking
 scenarios using a kinematic vehicle model and numerical optimization. The
 planner uses RRT* to generate an initial geometric path and an SQP-like
